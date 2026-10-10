@@ -14,10 +14,16 @@ pub enum ExecutionStatus {
     /// Currently executing.
     Running,
     /// Exited on its own. `code` is the process exit code.
-    Completed { code: i32 },
-    /// Terminated by a signal (e.g. SIGINT from Ctrl-C, SIGTERM). `signal` is
-    /// the POSIX signal number. On platforms without signals this stays `None`.
-    Interrupted { signal: Option<i32> },
+    Completed {
+        /// The process exit code (0 means success).
+        code: i32,
+    },
+    /// Terminated by a signal (e.g. SIGINT from Ctrl-C, SIGTERM). On platforms
+    /// without signals this stays `None`.
+    Interrupted {
+        /// The POSIX signal number that terminated the process, if known.
+        signal: Option<i32>,
+    },
     /// The shim could not run or supervise the command at all.
     Failed,
 }

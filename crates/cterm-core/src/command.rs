@@ -56,7 +56,9 @@ impl Command {
 /// A single captured environment variable.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EnvVar {
+    /// The variable name, e.g. `TERM`.
     pub key: String,
+    /// The variable value.
     pub value: String,
 }
 
