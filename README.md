@@ -20,7 +20,10 @@ though, can. `cterm` turns that into a *hybrid* workflow:
 
 ## Status
 
-Early scaffolding. Targeting **Ubuntu first**, then Windows, then macOS.
+Working end to end on **Linux and Windows** (macOS next). The daemon, gRPC API,
+SQLite store, shell shim/wrapper, webview, and daemon autostart all build and are
+tested on both. Live shim→daemon IPC (for driving an interactive wrapped shell
+from an agent in real time) is the main remaining piece.
 
 ## Architecture
 
@@ -57,10 +60,22 @@ This keeps the real shell untouched and reversible.
 Requires a Rust toolchain. On Ubuntu:
 
 ```bash
-sudo apt install -y build-essential pkg-config
+sudo apt install -y build-essential pkg-config protobuf-compiler
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 cargo test
 ```
+
+On Windows, the GNU toolchain works with a mingw-w64 `gcc` on `PATH` (e.g. from
+Strawberry Perl) and a `protoc` binary:
+
+```powershell
+rustup-init.exe -y --default-host x86_64-pc-windows-gnu --profile minimal
+$env:PROTOC = "C:\path\to\protoc.exe"   # from a protobuf release zip
+cargo test
+```
+
+Autostart (daemon on login): `cterm service enable` (systemd `--user` on Linux,
+a per-user Startup entry on Windows); undo with `cterm service disable`.
 
 ## License
 
