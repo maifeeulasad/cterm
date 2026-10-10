@@ -196,11 +196,16 @@ impl PtySession {
 
     #[cfg(not(unix))]
     fn signal_group(&self, _which: Interrupt) -> Result<()> {
-        // Windows: delivering Ctrl-C to a specific child is handled separately
-        // when the Windows backend lands.
-        Err(Error::Transport(
-            "interrupt is not yet implemented on this platform".to_owned(),
-        ))
+        // Windows has no process-group signals. Terminate the child directly;
+        // the `interrupted` flag still makes `wait` report Interrupted.
+        let mut guard = self
+            .child
+            .lock()
+            .map_err(|_| Error::Transport("pty child poisoned".to_owned()))?;
+        if let Some(child) = guard.as_mut() {
+            child.kill().map_err(|e| Error::Transport(e.to_string()))?;
+        }
+        Ok(())
     }
 
     /// Waits for the child to exit and reports how it ended.
@@ -226,7 +231,7 @@ impl PtySession {
 
         if interrupted.load(Ordering::SeqCst) {
             Ok(ExecutionStatus::Interrupted {
-                signal: Some(SIGINT_NUMBER),
+                signal: interrupt_signal(),
             })
         } else {
             Ok(ExecutionStatus::Completed {
@@ -236,8 +241,17 @@ impl PtySession {
     }
 }
 
-/// POSIX signal number for SIGINT; reported in interrupted status.
-const SIGINT_NUMBER: i32 = 2;
+/// The signal reported for an interrupt: SIGINT on Unix, none where there are
+/// no POSIX signals (Windows).
+#[cfg(unix)]
+fn interrupt_signal() -> Option<i32> {
+    Some(2) // SIGINT
+}
+
+#[cfg(not(unix))]
+fn interrupt_signal() -> Option<i32> {
+    None
+}
 
 #[derive(Clone, Copy)]
 enum Interrupt {

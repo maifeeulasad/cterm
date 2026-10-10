@@ -13,8 +13,8 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
 use cterm_core::{
-    Command, ExecutionEvent, ExecutionId, ExecutionRecord, ExecutionStatus, RecordStore, Result,
-    SessionId, StreamChunk, StreamKind,
+    Command, Error, ExecutionEvent, ExecutionId, ExecutionRecord, ExecutionStatus, RecordStore,
+    Result, SessionId, StreamChunk, StreamKind,
 };
 use tokio::sync::broadcast;
 use tokio::task::JoinHandle;
@@ -223,14 +223,47 @@ where
     let _ = events.send(ExecutionEvent::Started(record.clone()));
 
     let done = tokio::spawn(async move {
-        // Drain output until EOF (child exited, terminal released).
-        while let Some(data) = rx.recv().await {
+        // Completion is driven by the child exiting, not by output EOF: on
+        // Windows/ConPTY the output pipe does not reliably reach EOF when the
+        // child dies, so we wait on the child and drain output alongside it.
+        let wait_pty = pty.clone();
+        let mut waiter = tokio::spawn(async move { wait_pty.wait().await });
+
+        let record_chunk = |data: Vec<u8>| {
             let s = seq.fetch_add(1, Ordering::SeqCst);
-            let chunk = StreamChunk::now(execution, StreamKind::Stdout, s, data);
-            store.append_chunk(&chunk).await?;
-            let _ = events.send(ExecutionEvent::Chunk(chunk));
-        }
-        let status = pty.wait().await?;
+            StreamChunk::now(execution, StreamKind::Stdout, s, data)
+        };
+
+        let status = loop {
+            tokio::select! {
+                biased;
+                maybe = rx.recv() => match maybe {
+                    Some(data) => {
+                        let chunk = record_chunk(data);
+                        store.append_chunk(&chunk).await?;
+                        let _ = events.send(ExecutionEvent::Chunk(chunk));
+                    }
+                    // Output reached EOF (Unix case): the child is finished.
+                    None => break waiter
+                        .await
+                        .map_err(|e| Error::Other(format!("wait join failed: {e}")))??,
+                },
+                res = &mut waiter => {
+                    let status = res
+                        .map_err(|e| Error::Other(format!("wait join failed: {e}")))??;
+                    // Flush any output already buffered after the child exited.
+                    while let Ok(Some(data)) =
+                        tokio::time::timeout(std::time::Duration::from_millis(100), rx.recv()).await
+                    {
+                        let chunk = record_chunk(data);
+                        store.append_chunk(&chunk).await?;
+                        let _ = events.send(ExecutionEvent::Chunk(chunk));
+                    }
+                    break status;
+                }
+            }
+        };
+
         record.transition(status);
         store.put_execution(&record).await?;
         let _ = events.send(ExecutionEvent::Status(status));
