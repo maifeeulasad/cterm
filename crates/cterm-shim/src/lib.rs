@@ -14,4 +14,4 @@ pub mod pty;
 pub mod runner;
 
 pub use pty::{OutputReceiver, PtySession, Spawn};
-pub use runner::{start_recorded, RecordedRun, RunSpec};
+pub use runner::{start_recorded, RecordedRun, RunControl, RunSpec};

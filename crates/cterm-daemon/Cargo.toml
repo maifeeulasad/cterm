@@ -1,0 +1,31 @@
+[package]
+name = "cterm-daemon"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "The cterm daemon: owns the record store and live-run registry, and serves the gRPC Terminal API to agents."
+
+[lib]
+name = "cterm_daemon"
+path = "src/lib.rs"
+
+[[bin]]
+name = "cterm-daemon"
+path = "src/main.rs"
+
+[dependencies]
+cterm-core.workspace = true
+cterm-proto.workspace = true
+cterm-shim.workspace = true
+cterm-storage.workspace = true
+tonic.workspace = true
+prost.workspace = true
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "net", "sync", "signal", "time"] }
+async-stream.workspace = true
+futures-core.workspace = true
+
+[dev-dependencies]
+tokio-stream = { workspace = true, features = ["net"] }
