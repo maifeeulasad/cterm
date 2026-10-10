@@ -1,0 +1,18 @@
+[package]
+name = "cterm-proto"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "gRPC/protobuf contract for cterm (tonic), plus core<->proto conversions."
+
+[dependencies]
+cterm-core.workspace = true
+tonic.workspace = true
+prost.workspace = true
+time.workspace = true
+
+[build-dependencies]
+tonic-build.workspace = true

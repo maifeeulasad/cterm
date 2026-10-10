@@ -1,0 +1,146 @@
+syntax = "proto3";
+
+package cterm.v1;
+
+// The agent-facing control surface. An agent (e.g. Claude) uses this to run,
+// observe, and drive terminal executions on a host *through the daemon* —
+// without ever opening an SSH connection itself.
+service Terminal {
+  // Runs a command under a PTY on the host and streams its events live
+  // (Started, then interleaved output/input chunks, then a terminal Status).
+  rpc Run(RunRequest) returns (stream ExecutionEvent);
+
+  // Streams an existing execution: optional replay of stored history, then the
+  // live tail if it is still running.
+  rpc StreamExecution(StreamExecutionRequest) returns (stream ExecutionEvent);
+
+  // Writes bytes to a running execution's input.
+  rpc SendInput(SendInputRequest) returns (SendInputResponse);
+
+  // Interrupts (Ctrl-C) a running execution.
+  rpc Interrupt(InterruptRequest) returns (InterruptResponse);
+
+  // Lists known sessions, most recent first.
+  rpc ListSessions(ListSessionsRequest) returns (ListSessionsResponse);
+
+  // Lists executions in a session, oldest first.
+  rpc ListExecutions(ListExecutionsRequest) returns (ListExecutionsResponse);
+
+  // Fetches a single execution record.
+  rpc GetExecution(GetExecutionRequest) returns (GetExecutionResponse);
+}
+
+// -------- Value types (mirror cterm-core) --------
+
+enum StreamKind {
+  STREAM_KIND_UNSPECIFIED = 0;
+  STDIN = 1;
+  STDOUT = 2;
+  STDERR = 3;
+}
+
+message Status {
+  enum Kind {
+    PENDING = 0;
+    RUNNING = 1;
+    COMPLETED = 2;
+    INTERRUPTED = 3;
+    FAILED = 4;
+  }
+  Kind kind = 1;
+  int32 code = 2;       // COMPLETED: process exit code
+  bool has_signal = 3;  // INTERRUPTED: whether signal is known
+  int32 signal = 4;     // INTERRUPTED: POSIX signal number
+}
+
+message Host {
+  string name = 1;
+  bool is_production = 2;
+}
+
+message Session {
+  string id = 1;
+  Host host = 2;
+  string shell = 3;
+  string status = 4;     // "active" | "closed" | "dropped"
+  string opened_at = 5;  // RFC3339
+  string closed_at = 6;  // RFC3339, empty if still open
+}
+
+message Command {
+  string raw = 1;
+  string cwd = 2;
+  string shell = 3;
+}
+
+message ExecutionRecord {
+  string id = 1;
+  string session = 2;
+  Command command = 3;
+  Status status = 4;
+  string started_at = 5;  // RFC3339
+  string ended_at = 6;    // RFC3339, empty if not ended
+}
+
+message StreamChunk {
+  string execution = 1;
+  StreamKind kind = 2;
+  uint64 seq = 3;
+  bytes data = 4;
+  string at = 5;  // RFC3339
+}
+
+message ExecutionEvent {
+  oneof event {
+    ExecutionRecord started = 1;
+    StreamChunk chunk = 2;
+    Status status = 3;
+  }
+}
+
+// -------- RPC messages --------
+
+message RunRequest {
+  string session = 1;        // empty => open a new local session
+  string command = 2;        // raw command line (recorded for audit)
+  string program = 3;        // default: /bin/bash
+  repeated string args = 4;  // default: ["-lc", command]
+  string cwd = 5;
+  uint32 rows = 6;           // default 24
+  uint32 cols = 7;           // default 80
+}
+
+message StreamExecutionRequest {
+  string execution = 1;
+  bool replay = 2;  // include stored history before the live tail
+}
+
+message SendInputRequest {
+  string execution = 1;
+  bytes data = 2;
+}
+message SendInputResponse {}
+
+message InterruptRequest {
+  string execution = 1;
+}
+message InterruptResponse {}
+
+message ListSessionsRequest {}
+message ListSessionsResponse {
+  repeated Session sessions = 1;
+}
+
+message ListExecutionsRequest {
+  string session = 1;
+}
+message ListExecutionsResponse {
+  repeated ExecutionRecord executions = 1;
+}
+
+message GetExecutionRequest {
+  string execution = 1;
+}
+message GetExecutionResponse {
+  ExecutionRecord execution = 1;
+}

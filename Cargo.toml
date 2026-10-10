@@ -16,6 +16,7 @@ members = [
     "crates/cterm-core",
     "crates/cterm-storage",
     "crates/cterm-shim",
+    "crates/cterm-proto",
 ]
 
 [workspace.package]
@@ -36,9 +37,17 @@ async-trait = "0.1.77"
 tokio = { version = "1.36.0", features = ["rt", "rt-multi-thread", "sync", "macros", "io-util", "net", "time", "process", "signal"] }
 rusqlite = { version = "0.31.0", features = ["bundled"] }
 portable-pty = "0.8.1"
+tonic = "0.11.0"
+prost = "0.12.3"
+tonic-build = "0.11.0"
+futures-core = "0.3.30"
+tokio-stream = "0.1.14"
 
 # Local crates
 cterm-core = { path = "crates/cterm-core" }
+cterm-proto = { path = "crates/cterm-proto" }
+cterm-storage = { path = "crates/cterm-storage" }
+cterm-shim = { path = "crates/cterm-shim" }
 
 [profile.release]
 lto = "thin"
