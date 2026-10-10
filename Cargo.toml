@@ -1,0 +1,37 @@
+# cterm — a terminal integration / shim tool.
+#
+# This is a Cargo workspace. Crates are added incrementally as the system
+# grows. The layering (inner -> outer, dependencies only point inward):
+#
+#   cterm-core     domain model: sessions, executions, streams, status, traits.
+#   cterm-proto    gRPC/protobuf contract (tonic) — the agent-facing wire API.
+#   cterm-storage  persistence of execution records (SQLite).
+#   cterm-daemon   the collector: IPC server + gRPC server + storage.
+#   cterm-shim     the shell shim that runs under the real shell via a PTY.
+#   cterm-cli      operator CLI: install/remove the shim, status, tail.
+#   cterm-web      basic webview over stored records.
+[workspace]
+resolver = "2"
+members = [
+    "crates/cterm-core",
+]
+
+[workspace.package]
+version = "0.0.1"
+edition = "2021"
+rust-version = "1.75"
+license = "GPL-3.0-or-later"
+authors = ["Maifee Ul Asad"]
+repository = "https://github.com/maifeeulasad/cterm"
+
+[workspace.dependencies]
+serde = { version = "1.0.197", features = ["derive"] }
+serde_json = "1.0.114"
+thiserror = "1.0.58"
+uuid = { version = "1.7.0", features = ["v4", "serde"] }
+time = { version = "0.3.34", features = ["serde-well-known", "formatting", "parsing"] }
+async-trait = "0.1.77"
+
+[profile.release]
+lto = "thin"
+strip = true

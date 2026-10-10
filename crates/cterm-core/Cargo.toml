@@ -1,0 +1,19 @@
+[package]
+name = "cterm-core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Core domain model for cterm: sessions, executions, stream chunks, status, and the ports (traits) the rest of the system implements."
+
+[dependencies]
+serde.workspace = true
+thiserror.workspace = true
+uuid.workspace = true
+time.workspace = true
+async-trait.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true

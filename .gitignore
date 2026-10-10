@@ -1,0 +1,22 @@
+# Rust
+/target
+**/target
+Cargo.lock.bak
+
+# Local data / runtime artifacts
+*.db
+*.db-journal
+*.sqlite
+*.sqlite-*
+/run
+*.sock
+
+# Editor / OS
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/
+
+# Logs
+*.log
