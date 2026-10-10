@@ -10,6 +10,7 @@ mod commands;
 mod config;
 mod error;
 mod layout;
+mod service;
 mod wrapper;
 
 use std::path::Path;
@@ -37,6 +38,7 @@ fn cli(args: &[String]) -> i32 {
         Some("install") => cmd_install(&args[1..]),
         Some("uninstall") => cmd_uninstall(),
         Some("status") => cmd_status(),
+        Some("service") => cmd_service(&args[1..]),
         Some("-h") | Some("--help") | None => {
             print_usage();
             0
@@ -162,6 +164,79 @@ fn cmd_status() -> i32 {
     }
 }
 
+fn cmd_service(args: &[String]) -> i32 {
+    let layout = layout_or_die();
+    let unit_dir = match service::default_unit_dir() {
+        Ok(d) => d,
+        Err(e) => {
+            eprintln!("cterm: {e}");
+            return 1;
+        }
+    };
+
+    match args.first().map(String::as_str) {
+        Some("enable") => {
+            let daemon = match service::locate_daemon(&layout) {
+                Ok(p) => p,
+                Err(e) => {
+                    eprintln!("cterm: {e} (build it, or place cterm-daemon next to cterm)");
+                    return 1;
+                }
+            };
+            match service::install_unit(&layout, &unit_dir, &daemon, service::DEFAULT_ADDR) {
+                Ok(path) => println!("Wrote unit {}", path.display()),
+                Err(e) => {
+                    eprintln!("cterm: could not write unit: {e}");
+                    return 1;
+                }
+            }
+            // Best-effort activation; the unit file is already in place.
+            match service::systemctl(&["daemon-reload"])
+                .and_then(|_| service::systemctl(&["enable", "--now", service::UNIT_NAME]))
+            {
+                Ok(_) => {
+                    println!("Enabled {} (starts on login).", service::UNIT_NAME);
+                    println!("Tip: `loginctl enable-linger $USER` to also start it at boot.");
+                    0
+                }
+                Err(e) => {
+                    eprintln!("cterm: unit written but activation failed: {e}");
+                    eprintln!("Run manually in a desktop session:");
+                    eprintln!("  systemctl --user daemon-reload && systemctl --user enable --now {}", service::UNIT_NAME);
+                    1
+                }
+            }
+        }
+        Some("disable") => {
+            let _ = service::systemctl(&["disable", "--now", service::UNIT_NAME]);
+            match service::remove_unit(&unit_dir) {
+                Ok(true) => println!("Disabled and removed {}.", service::UNIT_NAME),
+                Ok(false) => println!("No unit to remove."),
+                Err(e) => {
+                    eprintln!("cterm: {e}");
+                    return 1;
+                }
+            }
+            0
+        }
+        Some("status") => {
+            let unit_path = unit_dir.join(service::UNIT_NAME);
+            println!("unit: {} ({})", unit_path.display(), if unit_path.exists() { "present" } else { "absent" });
+            for q in ["is-enabled", "is-active"] {
+                match service::systemctl(&[q, service::UNIT_NAME]) {
+                    Ok(out) => println!("{q}: {}", out.trim()),
+                    Err(e) => println!("{q}: {e}"),
+                }
+            }
+            0
+        }
+        _ => {
+            eprintln!("usage: cterm service <enable|disable|status>");
+            2
+        }
+    }
+}
+
 fn print_usage() {
     eprintln!(
         "cterm — terminal integration shim
@@ -170,6 +245,7 @@ USAGE:
     cterm install [SHELL...] [--rc <rcfile>]   Install shims (default: zsh, bash)
     cterm uninstall                            Remove installed shims
     cterm status                               Show install state
+    cterm service <enable|disable|status>      Daemon autostart (systemd --user, Linux)
 
 When this binary is invoked under a shell's name (e.g. as ~/.cterm/bin/bash),
 it transparently wraps that shell."
