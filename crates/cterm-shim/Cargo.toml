@@ -18,3 +18,4 @@ nix = { version = "0.27.1", features = ["signal"] }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "time"] }
+cterm-storage = { path = "../cterm-storage" }

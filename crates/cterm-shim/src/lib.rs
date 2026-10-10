@@ -11,5 +11,7 @@
 #![warn(missing_docs)]
 
 pub mod pty;
+pub mod runner;
 
 pub use pty::{OutputReceiver, PtySession, Spawn};
+pub use runner::{start_recorded, RecordedRun, RunSpec};
