@@ -107,6 +107,11 @@ impl<S: RecordStore + 'static> RunControl<S> {
     pub async fn interrupt(&self) -> Result<()> {
         self.pty.interrupt().await
     }
+
+    /// Resizes the terminal (e.g. on the controlling window's SIGWINCH).
+    pub fn resize(&self, rows: u16, cols: u16) -> Result<()> {
+        self.pty.resize(rows, cols)
+    }
 }
 
 /// A live, recording execution. Await [`RecordedRun::done`] for the final
@@ -155,6 +160,11 @@ impl<S: RecordStore + 'static> RecordedRun<S> {
     /// Interrupts the process (see [`RunControl::interrupt`]).
     pub async fn interrupt(&self) -> Result<()> {
         self.control.interrupt().await
+    }
+
+    /// Resizes the terminal (see [`RunControl::resize`]).
+    pub fn resize(&self, rows: u16, cols: u16) -> Result<()> {
+        self.control.resize(rows, cols)
     }
 }
 

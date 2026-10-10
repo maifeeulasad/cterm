@@ -60,6 +60,12 @@ impl SqliteStore {
     }
 
     fn from_conn(conn: Connection) -> Result<Self> {
+        // WAL lets the daemon read while a shim writes the same database from
+        // another process; busy_timeout rides out brief write-lock contention
+        // instead of failing with SQLITE_BUSY. (WAL is a no-op for :memory:.)
+        let _ = conn.pragma_update(None, "journal_mode", "WAL");
+        conn.busy_timeout(std::time::Duration::from_secs(5))
+            .map_err(sql_err)?;
         conn.execute_batch(SCHEMA).map_err(sql_err)?;
         Ok(Self {
             conn: Arc::new(Mutex::new(conn)),
