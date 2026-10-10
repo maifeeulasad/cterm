@@ -14,7 +14,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use cterm_core::{
-    Command, ExecutionEvent, ExecutionStatus, Host, RecordStore, Session, StreamKind,
+    Command, ExecutionEvent, ExecutionStatus, Host, RecordStore, Session, SessionStatus, StreamKind,
 };
 use cterm_shim::{start_recorded, RunSpec};
 use cterm_storage::SqliteStore;
@@ -59,7 +59,7 @@ fn try_record(name: &str, args: &[String]) -> CliResult<i32> {
 async fn record_session(db: &str, name: &str, real: &str, args: &[String]) -> CliResult<i32> {
     let store = Arc::new(SqliteStore::open(db).map_err(|e| CliError::Msg(e.to_string()))?);
 
-    let session = Session::open(Host::local(), name);
+    let mut session = Session::open(Host::local(), name);
     store
         .put_session(&session)
         .await
@@ -147,6 +147,10 @@ async fn record_session(db: &str, name: &str, real: &str, args: &[String]) -> Cl
     let _ = out_task.await;
     in_task.abort();
     winch_task.abort();
+
+    // The shell has exited, so the session is over: mark it closed.
+    session.close(SessionStatus::Closed);
+    let _ = store.put_session(&session).await;
 
     Ok(exit_code(status))
 }
