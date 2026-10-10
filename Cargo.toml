@@ -14,6 +14,7 @@
 resolver = "2"
 members = [
     "crates/cterm-core",
+    "crates/cterm-storage",
 ]
 
 [workspace.package]
@@ -31,6 +32,11 @@ thiserror = "1.0.58"
 uuid = { version = "1.7.0", features = ["v4", "serde"] }
 time = { version = "0.3.34", features = ["serde-well-known", "formatting", "parsing"] }
 async-trait = "0.1.77"
+tokio = { version = "1.36.0", features = ["rt", "rt-multi-thread", "sync", "macros", "io-util", "net", "time", "process", "signal"] }
+rusqlite = { version = "0.31.0", features = ["bundled"] }
+
+# Local crates
+cterm-core = { path = "crates/cterm-core" }
 
 [profile.release]
 lto = "thin"
