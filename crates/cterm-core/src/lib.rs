@@ -29,6 +29,7 @@
 
 pub mod command;
 pub mod error;
+pub mod event;
 pub mod ids;
 pub mod ports;
 pub mod record;
@@ -40,6 +41,7 @@ pub mod stream;
 // Re-export the common surface so downstream crates can `use cterm_core::*`.
 pub use command::{Command, EnvVar};
 pub use error::{Error, Result};
+pub use event::ExecutionEvent;
 pub use ids::{ExecutionId, SessionId};
 pub use ports::{RecordStore, TerminalControl};
 pub use record::ExecutionRecord;

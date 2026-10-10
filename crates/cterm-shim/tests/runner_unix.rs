@@ -5,7 +5,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use cterm_core::{Command, ExecutionStatus, RecordStore, SessionId, StreamKind};
+use cterm_core::{Command, ExecutionEvent, ExecutionStatus, RecordStore, SessionId, StreamKind};
 use cterm_shim::{start_recorded, RunSpec};
 use cterm_storage::MemoryStore;
 
@@ -77,6 +77,47 @@ async fn records_input_and_evaluates_it() {
     // And it was genuinely evaluated (not just echoed): 6*7 = 42.
     let stdout = String::from_utf8_lossy(&concat(StreamKind::Stdout, &chunks)).into_owned();
     assert!(stdout.contains("val-42"), "stdout was: {stdout:?}");
+}
+
+#[tokio::test]
+async fn live_events_are_published_in_order() {
+    let store = Arc::new(MemoryStore::new());
+    let mut run = start_recorded(
+        store.clone(),
+        SessionId::new(),
+        Command::new("printf LIVE", "bash"),
+        RunSpec::new("/bin/bash", ["-c", "printf LIVE"]),
+    )
+    .await
+    .expect("start");
+    let mut rx = run.take_primary().expect("primary available once");
+
+    let mut saw_started = false;
+    let mut output = Vec::new();
+    let mut final_status = None;
+    loop {
+        match tokio::time::timeout(Duration::from_secs(10), rx.recv()).await {
+            Ok(Ok(ExecutionEvent::Started(rec))) => {
+                assert_eq!(rec.status, ExecutionStatus::Running);
+                saw_started = true;
+            }
+            Ok(Ok(ExecutionEvent::Chunk(c))) if c.kind == StreamKind::Stdout => {
+                output.extend_from_slice(&c.data);
+            }
+            Ok(Ok(ExecutionEvent::Chunk(_))) => {}
+            Ok(Ok(ExecutionEvent::Status(s))) => {
+                final_status = Some(s);
+                break;
+            }
+            Ok(Err(_)) | Err(_) => break,
+        }
+    }
+
+    assert!(saw_started, "did not observe Started");
+    assert!(String::from_utf8_lossy(&output).contains("LIVE"));
+    assert_eq!(final_status, Some(ExecutionStatus::Completed { code: 0 }));
+
+    run.done.await.expect("join").expect("run result");
 }
 
 #[tokio::test]
