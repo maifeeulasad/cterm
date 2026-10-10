@@ -1,0 +1,29 @@
+[package]
+name = "cterm-cli"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "cterm operator CLI and shell shim (install/uninstall/status, and the PATH-shim shell wrapper)."
+
+[[bin]]
+name = "cterm"
+path = "src/main.rs"
+
+[dependencies]
+cterm-core.workspace = true
+cterm-storage.workspace = true
+cterm-shim.workspace = true
+serde = { workspace = true }
+serde_json.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "sync", "signal", "io-std", "io-util", "time"] }
+
+[target.'cfg(unix)'.dependencies]
+nix = { version = "0.27.1", features = ["term", "signal"] }
+terminal_size = "0.3.0"
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }

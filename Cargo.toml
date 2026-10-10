@@ -18,6 +18,7 @@ members = [
     "crates/cterm-shim",
     "crates/cterm-proto",
     "crates/cterm-daemon",
+    "crates/cterm-cli",
 ]
 
 [workspace.package]
