@@ -25,9 +25,10 @@ fn main() {
         .unwrap_or("cterm")
         .to_owned();
 
-    // Wrapper mode: invoked under a shell's name.
-    if commands::is_wrappable(&arg0) {
-        std::process::exit(wrapper::run(&arg0, &args[1..]));
+    // Wrapper mode: invoked under a shell's name (normalized across .exe/case).
+    let shell_name = commands::normalize_shell_name(&arg0);
+    if commands::is_wrappable(&shell_name) {
+        std::process::exit(wrapper::run(&shell_name, &args[1..]));
     }
 
     std::process::exit(cli(&args[1..]));

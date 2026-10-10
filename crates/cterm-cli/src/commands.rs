@@ -14,15 +14,70 @@ use crate::error::{CliError, CliResult};
 use crate::layout::Layout;
 
 /// Shell basenames we are willing to wrap.
+#[cfg(windows)]
+pub const WRAPPABLE: &[&str] = &["cmd", "powershell", "pwsh", "bash"];
+#[cfg(not(windows))]
 pub const WRAPPABLE: &[&str] = &["bash", "zsh", "sh", "dash", "fish", "ksh"];
 
 /// Shells installed by default when none are named.
+#[cfg(windows)]
+const DEFAULT_SHELLS: &[&str] = &["powershell", "cmd"];
+#[cfg(not(windows))]
 const DEFAULT_SHELLS: &[&str] = &["zsh", "bash"];
 
-/// Whether a basename is one we act as a wrapper for.
+/// Normalizes an invoked program name to a bare, lowercase shell name:
+/// strips any directory and (on Windows) a trailing `.exe`.
+#[must_use]
+pub fn normalize_shell_name(arg0: &str) -> String {
+    let base = arg0.rsplit(['/', '\\']).next().unwrap_or(arg0);
+    let base = base
+        .strip_suffix(".exe")
+        .or_else(|| base.strip_suffix(".EXE"))
+        .unwrap_or(base);
+    base.to_lowercase()
+}
+
+/// Whether a (possibly path/`.exe`-qualified) name is one we wrap.
 #[must_use]
 pub fn is_wrappable(name: &str) -> bool {
-    WRAPPABLE.contains(&name)
+    WRAPPABLE.contains(&normalize_shell_name(name).as_str())
+}
+
+/// The on-disk file name for a shim wrapping `name` (adds `.exe` on Windows).
+#[must_use]
+pub fn shim_file_name(name: &str) -> String {
+    #[cfg(windows)]
+    {
+        format!("{name}.exe")
+    }
+    #[cfg(not(windows))]
+    {
+        name.to_owned()
+    }
+}
+
+/// Candidate on-disk file names for an executable `name` (expands Windows
+/// PATHEXT extensions when `name` has none).
+fn executable_names(name: &str) -> Vec<String> {
+    #[cfg(windows)]
+    {
+        if Path::new(name).extension().is_some() {
+            return vec![name.to_owned()];
+        }
+        let pathext =
+            std::env::var("PATHEXT").unwrap_or_else(|_| ".COM;.EXE;.BAT;.CMD".to_owned());
+        let mut names: Vec<String> = pathext
+            .split(';')
+            .filter(|e| !e.is_empty())
+            .map(|e| format!("{name}{}", e.to_lowercase()))
+            .collect();
+        names.push(name.to_owned());
+        names
+    }
+    #[cfg(not(windows))]
+    {
+        vec![name.to_owned()]
+    }
 }
 
 fn is_executable(path: &Path) -> bool {
@@ -47,21 +102,26 @@ fn is_executable(path: &Path) -> bool {
 /// locations but never `exclude` (our own shim directory).
 #[must_use]
 pub fn find_real_shell(name: &str, exclude: &Path) -> Option<PathBuf> {
+    let candidates = executable_names(name);
     if let Some(paths) = std::env::var_os("PATH") {
         for dir in std::env::split_paths(&paths) {
             if dir == exclude {
                 continue;
             }
-            let cand = dir.join(name);
-            if is_executable(&cand) {
-                return Some(cand);
+            for cand_name in &candidates {
+                let cand = dir.join(cand_name);
+                if is_executable(&cand) {
+                    return Some(cand);
+                }
             }
         }
     }
     for dir in ["/usr/bin", "/bin", "/usr/local/bin"] {
-        let cand = Path::new(dir).join(name);
-        if cand.parent() != Some(exclude) && is_executable(&cand) {
-            return Some(cand);
+        for cand_name in &candidates {
+            let cand = Path::new(dir).join(cand_name);
+            if cand.parent() != Some(exclude) && is_executable(&cand) {
+                return Some(cand);
+            }
         }
     }
     None
@@ -102,12 +162,13 @@ pub fn install(layout: &Layout, requested: &[String]) -> CliResult<Installed> {
             .map(|n| (*n).to_owned())
             .collect()
     } else {
-        requested.to_vec()
+        requested.iter().map(|n| normalize_shell_name(n)).collect()
     };
     if names.is_empty() {
-        return Err(CliError::Msg(
-            "no shells found to wrap (tried: zsh, bash)".to_owned(),
-        ));
+        return Err(CliError::Msg(format!(
+            "no shells found to wrap (tried: {})",
+            DEFAULT_SHELLS.join(", ")
+        )));
     }
 
     let exe = std::env::current_exe()?;
@@ -121,7 +182,7 @@ pub fn install(layout: &Layout, requested: &[String]) -> CliResult<Installed> {
         let real = find_real_shell(name, &layout.bin_dir()).ok_or_else(|| {
             CliError::Msg(format!("could not find a real '{name}' on PATH to wrap"))
         })?;
-        let dest = layout.bin_dir().join(name);
+        let dest = layout.bin_dir().join(shim_file_name(name));
         if dest != exe {
             fs::copy(&exe, &dest)?;
         }
@@ -234,14 +295,21 @@ mod tests {
         let base = temp_base();
         let layout = Layout::new(&base);
 
-        let installed = install(&layout, &["bash".to_owned()]).expect("install");
-        assert_eq!(installed.shims, vec!["bash".to_owned()]);
+        // A shell that exists on each platform.
+        #[cfg(windows)]
+        let shell = "cmd";
+        #[cfg(not(windows))]
+        let shell = "bash";
+        let shim_name = shim_file_name(shell);
+
+        let installed = install(&layout, &[shell.to_owned()]).expect("install");
+        assert_eq!(installed.shims, vec![shell.to_owned()]);
 
         // A shim binary exists, and the recorded real path is a different,
         // genuine executable (no self-exec loop).
-        let shim = layout.bin_dir().join("bash");
+        let shim = layout.bin_dir().join(&shim_name);
         assert!(is_executable(&shim));
-        let real = PathBuf::from(&installed.config.shells["bash"]);
+        let real = PathBuf::from(&installed.config.shells[shell]);
         assert_ne!(real, shim);
         assert!(is_executable(&real));
         assert!(!installed.config.db.is_empty());
@@ -252,12 +320,12 @@ mod tests {
 
         // Status reflects the install.
         let st = status(&layout).expect("status");
-        assert!(st.installed_shims.contains(&"bash".to_owned()));
+        assert!(st.installed_shims.contains(&shim_name));
         assert!(st.config.is_some());
 
         // Uninstall removes the shim dir but keeps config.
         let removed = uninstall(&layout).expect("uninstall");
-        assert!(removed.contains(&"bash".to_owned()));
+        assert!(removed.contains(&shim_name));
         assert!(!shim.exists());
         assert!(layout.config_path().exists());
 

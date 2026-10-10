@@ -125,16 +125,25 @@ async fn record_session(db: &str, name: &str, real: &str, args: &[String]) -> Cl
         }
     });
 
-    // Window resize: forward SIGWINCH to the PTY.
+    // Window resize: forward SIGWINCH to the PTY (Unix). Windows delivers
+    // resize via console events, not signals; handled when that backend lands.
     let resize_control = run.control();
     let winch_task = tokio::spawn(async move {
-        if let Ok(mut winch) =
-            tokio::signal::unix::signal(tokio::signal::unix::SignalKind::window_change())
+        #[cfg(unix)]
         {
-            while winch.recv().await.is_some() {
-                let (cols, rows) = current_size();
-                let _ = resize_control.resize(rows, cols);
+            if let Ok(mut winch) =
+                tokio::signal::unix::signal(tokio::signal::unix::SignalKind::window_change())
+            {
+                while winch.recv().await.is_some() {
+                    let (cols, rows) = current_size();
+                    let _ = resize_control.resize(rows, cols);
+                }
             }
+        }
+        #[cfg(not(unix))]
+        {
+            let _ = &resize_control;
+            std::future::pending::<()>().await;
         }
     });
 

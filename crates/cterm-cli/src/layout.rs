@@ -17,10 +17,11 @@ impl Layout {
         Self { base: base.into() }
     }
 
-    /// The default layout at `$HOME/.cterm`.
+    /// The default layout at `$HOME/.cterm` (`%USERPROFILE%\.cterm` on Windows).
     pub fn default_home() -> CliResult<Self> {
         let home = std::env::var_os("HOME")
-            .ok_or_else(|| CliError::Msg("HOME is not set".to_owned()))?;
+            .or_else(|| std::env::var_os("USERPROFILE"))
+            .ok_or_else(|| CliError::Msg("neither HOME nor USERPROFILE is set".to_owned()))?;
         Ok(Self::new(Path::new(&home).join(".cterm")))
     }
 
