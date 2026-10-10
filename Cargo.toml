@@ -19,6 +19,7 @@ members = [
     "crates/cterm-proto",
     "crates/cterm-daemon",
     "crates/cterm-cli",
+    "crates/cterm-web",
 ]
 
 [workspace.package]
@@ -45,6 +46,9 @@ tonic-build = "0.11.0"
 futures-core = "0.3.30"
 tokio-stream = "0.1.14"
 async-stream = "0.3.5"
+axum = "0.6.20"
+tower = "0.4.13"
+hyper = "0.14.28"
 
 # Local crates
 cterm-core = { path = "crates/cterm-core" }

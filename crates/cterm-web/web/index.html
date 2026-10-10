@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>cterm</title>
+<style>
+  :root {
+    --bg: #0f1115; --panel: #171a21; --border: #262b36; --fg: #d7dce3;
+    --muted: #8b94a3; --accent: #5aa9e6; --ok: #57c785; --warn: #e6b955;
+    --bad: #e06c75; --sel: #223049;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--fg);
+    font: 14px/1.45 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+    height: 100vh; display: flex; flex-direction: column;
+  }
+  header {
+    padding: 10px 16px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 12px; background: var(--panel);
+  }
+  header h1 { font-size: 15px; margin: 0; letter-spacing: .5px; }
+  header .sub { color: var(--muted); font-size: 12px; }
+  header button {
+    margin-left: auto; background: var(--sel); color: var(--fg);
+    border: 1px solid var(--border); border-radius: 6px; padding: 5px 10px;
+    cursor: pointer; font-size: 12px;
+  }
+  header button:hover { border-color: var(--accent); }
+  main { flex: 1; display: grid; grid-template-columns: 260px 320px 1fr; min-height: 0; }
+  .col { border-right: 1px solid var(--border); overflow-y: auto; min-height: 0; }
+  .col h2 {
+    font-size: 11px; text-transform: uppercase; letter-spacing: .08em;
+    color: var(--muted); margin: 0; padding: 10px 14px 6px;
+    position: sticky; top: 0; background: var(--bg);
+  }
+  .row {
+    padding: 8px 14px; border-bottom: 1px solid var(--border); cursor: pointer;
+  }
+  .row:hover { background: var(--panel); }
+  .row.sel { background: var(--sel); }
+  .row .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .row .title { font-weight: 600; word-break: break-all; }
+  .row .meta { color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .badge {
+    display: inline-block; font-size: 11px; padding: 1px 7px; border-radius: 999px;
+    border: 1px solid var(--border);
+  }
+  .badge.running { color: var(--accent); border-color: var(--accent); }
+  .badge.completed { color: var(--ok); border-color: var(--ok); }
+  .badge.interrupted { color: var(--warn); border-color: var(--warn); }
+  .badge.failed, .badge.pending { color: var(--bad); border-color: var(--bad); }
+  #transcript-wrap { display: flex; flex-direction: column; min-height: 0; }
+  #transcript-head { padding: 10px 16px; border-bottom: 1px solid var(--border); }
+  #transcript-head .cmd {
+    font-family: ui-monospace, monospace; font-size: 13px; word-break: break-all;
+  }
+  #transcript-head .meta { color: var(--muted); font-size: 12px; margin-top: 4px; }
+  pre#transcript {
+    flex: 1; margin: 0; padding: 14px 16px; overflow: auto; white-space: pre-wrap;
+    word-break: break-word; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 13px; color: #c8d0da;
+  }
+  .empty { color: var(--muted); padding: 14px; font-style: italic; }
+</style>
+</head>
+<body>
+<header>
+  <h1>cterm</h1>
+  <span class="sub">recorded terminal sessions</span>
+  <button id="refresh">Refresh</button>
+</header>
+<main>
+  <div class="col" id="sessions"><h2>Sessions</h2><div id="sessions-list"></div></div>
+  <div class="col" id="executions"><h2>Executions</h2><div id="executions-list"><div class="empty">Select a session</div></div></div>
+  <div class="col" id="transcript-wrap">
+    <h2 style="position:static">Transcript</h2>
+    <div id="transcript-head"><div class="empty">Select an execution</div></div>
+    <pre id="transcript"></pre>
+  </div>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+let state = { session: null, execution: null };
+
+async function api(path) {
+  const r = await fetch(path);
+  if (!r.ok) throw new Error(path + ": " + r.status);
+  return r.json();
+}
+const shortId = (id) => { const u = String(id).split("-").slice(1).join("-") || id; return u.slice(0, 8); };
+const kindOf = (status) => (status && status.kind) ? status.kind : "pending";
+function statusLabel(status) {
+  const k = kindOf(status);
+  if (k === "completed") return "exit " + (status.code ?? 0);
+  if (k === "interrupted") return "interrupted";
+  return k;
+}
+function badge(status) {
+  const k = kindOf(status);
+  return `<span class="badge ${k}">${statusLabel(status)}</span>`;
+}
+
+async function loadSessions() {
+  const list = $("sessions-list");
+  try {
+    const sessions = await api("/api/sessions");
+    if (!sessions.length) { list.innerHTML = '<div class="empty">No sessions yet</div>'; return; }
+    list.innerHTML = "";
+    for (const s of sessions) {
+      const div = document.createElement("div");
+      div.className = "row" + (state.session === s.id ? " sel" : "");
+      div.innerHTML = `<div class="title mono">${shortId(s.id)}</div>
+        <div class="meta">${s.host?.name ?? "?"} · ${s.shell} · ${s.status}</div>
+        <div class="meta">${s.opened_at ?? ""}</div>`;
+      div.onclick = () => selectSession(s.id);
+      list.appendChild(div);
+    }
+  } catch (e) { list.innerHTML = `<div class="empty">Error: ${e.message}</div>`; }
+}
+
+async function selectSession(id) {
+  state.session = id; loadSessions();
+  const list = $("executions-list");
+  list.innerHTML = '<div class="empty">Loading…</div>';
+  try {
+    const execs = await api(`/api/sessions/${id}/executions`);
+    if (!execs.length) { list.innerHTML = '<div class="empty">No executions</div>'; return; }
+    list.innerHTML = "";
+    for (const e of execs) {
+      const div = document.createElement("div");
+      div.className = "row" + (state.execution === e.id ? " sel" : "");
+      div.innerHTML = `<div class="title mono">${e.command?.raw ?? shortId(e.id)}</div>
+        <div class="meta">${badge(e.status)} · ${e.started_at ?? ""}</div>`;
+      div.onclick = () => selectExecution(e.id);
+      list.appendChild(div);
+    }
+  } catch (e) { list.innerHTML = `<div class="empty">Error: ${e.message}</div>`; }
+}
+
+async function selectExecution(id) {
+  state.execution = id;
+  if (state.session) selectSessionHighlight();
+  try {
+    const { record, text } = await api(`/api/executions/${id}/transcript`);
+    $("transcript-head").innerHTML = `<div class="cmd">${(record.command?.raw ?? "").replace(/</g,"&lt;")}</div>
+      <div class="meta">${badge(record.status)} · ${record.started_at ?? ""}${record.ended_at ? " → " + record.ended_at : ""}</div>`;
+    $("transcript").textContent = text || "(no output recorded)";
+  } catch (e) { $("transcript").textContent = "Error: " + e.message; }
+}
+function selectSessionHighlight() {
+  // re-render executions list selection
+  const list = $("executions-list");
+  for (const row of list.querySelectorAll(".row")) row.classList.remove("sel");
+}
+
+$("refresh").onclick = () => { loadSessions(); if (state.session) selectSession(state.session); };
+loadSessions();
+</script>
+</body>
+</html>

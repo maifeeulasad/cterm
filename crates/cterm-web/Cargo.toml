@@ -1,0 +1,30 @@
+[package]
+name = "cterm-web"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "A basic webview over cterm's recorded executions: JSON API plus a static UI."
+
+[lib]
+name = "cterm_web"
+path = "src/lib.rs"
+
+[[bin]]
+name = "cterm-web"
+path = "src/main.rs"
+
+[dependencies]
+cterm-core.workspace = true
+cterm-storage.workspace = true
+axum.workspace = true
+serde = { workspace = true }
+serde_json.workspace = true
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "net"] }
+
+[dev-dependencies]
+tower = { workspace = true, features = ["util"] }
+hyper.workspace = true
+tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
