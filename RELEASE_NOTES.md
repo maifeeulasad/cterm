@@ -1,10 +1,19 @@
-# cterm v0.2.1
+# cterm v0.2.2
 
 A terminal integration / shim tool that lets agents observe, record, stream, and
 drive shell command executions **without ever holding the credentials used to
 open the session**.
 
 > Early release. Tri-platform; shared for feedback. Expect rough edges.
+
+## 0.2.2 — docs & help for agents
+
+- Rewrote `cterm --help` to describe the whole system (the gRPC `Terminal` API,
+  the `cterm-daemon`/`cterm-web` companions, env vars, and the per-platform
+  wrappable shells), and added `--version`. Help now prints to stdout.
+- README: corrected the crate table (all crates are shipped, not planned) and
+  the shim description (reversible PATH shim, no shell renaming), and added an
+  agent-oriented Usage section. No functional changes.
 
 ## 0.2.1 — broader shells, no loopback
 
@@ -69,7 +78,7 @@ Binaries: `cterm` (CLI + shim), `cterm-daemon`, `cterm-web`.
 ### Linux (x86_64)
 
 ```bash
-VER=v0.2.1
+VER=v0.2.2
 curl -fsSL "https://github.com/maifeeulasad/cterm/releases/download/$VER/cterm-$VER-x86_64-linux.tar.gz" | tar -xz
 sudo install -m 0755 cterm cterm-daemon cterm-web /usr/local/bin/
 cterm --help
@@ -78,7 +87,7 @@ cterm --help
 ### macOS (Apple Silicon or Intel)
 
 ```bash
-VER=v0.2.1
+VER=v0.2.2
 ARCH=$([ "$(uname -m)" = "arm64" ] && echo aarch64 || echo x86_64)
 curl -fsSL "https://github.com/maifeeulasad/cterm/releases/download/$VER/cterm-$VER-$ARCH-macos.tar.gz" | tar -xz
 # Gatekeeper quarantines downloaded binaries; clear it, then install:
@@ -90,7 +99,7 @@ cterm --help
 ### Windows (x86_64, PowerShell)
 
 ```powershell
-$ver = "v0.2.1"
+$ver = "v0.2.2"
 Invoke-WebRequest "https://github.com/maifeeulasad/cterm/releases/download/$ver/cterm-$ver-x86_64-windows.zip" -OutFile cterm.zip
 Expand-Archive cterm.zip -DestinationPath "$env:LOCALAPPDATA\cterm" -Force
 # Add "$env:LOCALAPPDATA\cterm" to your PATH, then:
@@ -106,7 +115,7 @@ GitHub Actions). Verify that an archive was built by this repo's release
 workflow:
 
 ```bash
-gh attestation verify cterm-v0.2.1-x86_64-linux.tar.gz --repo maifeeulasad/cterm
+gh attestation verify cterm-v0.2.2-x86_64-linux.tar.gz --repo maifeeulasad/cterm
 ```
 
 ## Known limitations

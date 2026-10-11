@@ -1,8 +1,9 @@
 //! `cterm` — operator CLI and shell shim (multi-call binary).
 //!
-//! Invoked as `cterm`, it runs subcommands (install/uninstall/status). Invoked
-//! under a wrapped shell's name (e.g. as `~/.cterm/bin/bash`), it acts as that
-//! shell's wrapper. The dispatch is on `argv[0]`'s basename.
+//! Invoked as `cterm`, it runs subcommands (install/uninstall/status/service,
+//! plus --help/--version). Invoked under a wrapped shell's name (e.g. as
+//! `~/.cterm/bin/bash`), it acts as that shell's wrapper. Dispatch is on
+//! `argv[0]`'s basename.
 
 // `deny` (not `forbid`) so the Windows console module can scope-allow the
 // unavoidable SetConsoleMode FFI; everything else stays unsafe-free.
@@ -44,13 +45,17 @@ fn cli(args: &[String]) -> i32 {
         Some("uninstall") => cmd_uninstall(),
         Some("status") => cmd_status(),
         Some("service") => cmd_service(&args[1..]),
-        Some("-h") | Some("--help") | None => {
-            print_usage();
+        Some("-h") | Some("--help") | Some("help") | None => {
+            // Help goes to stdout so it can be captured by scripts/agents.
+            println!("{}", usage());
+            0
+        }
+        Some("-V") | Some("--version") | Some("version") => {
+            println!("cterm {}", env!("CARGO_PKG_VERSION"));
             0
         }
         Some(other) => {
-            eprintln!("cterm: unknown command '{other}'\n");
-            print_usage();
+            eprintln!("cterm: unknown command '{other}'\n\n{}", usage());
             2
         }
     }
@@ -196,17 +201,57 @@ fn cmd_service(args: &[String]) -> i32 {
     }
 }
 
-fn print_usage() {
-    eprintln!(
-        "cterm — terminal integration shim
+fn usage() -> String {
+    format!(
+        "cterm {version} — terminal integration shim.
+
+Record, stream, and drive shell sessions so an agent can observe and control
+them through a local daemon, WITHOUT the agent holding SSH keys or credentials.
+A human opens a shell; the agent interacts with it over the daemon's gRPC API.
 
 USAGE:
-    cterm install [SHELL...] [--rc <rcfile>]   Install shims (default: zsh, bash)
-    cterm uninstall                            Remove installed shims
-    cterm status                               Show install state
-    cterm service <enable|disable|status>      Daemon autostart (systemd --user, Linux)
+    cterm <command> [args]
 
-When this binary is invoked under a shell's name (e.g. as ~/.cterm/bin/bash),
-it transparently wraps that shell."
-    );
+COMMANDS:
+    install [SHELL...] [--rc <rcfile>]
+        Install the reversible PATH shim for the named shells (default: the
+        common interactive shells present on this system). --rc <file> appends
+        the PATH entry to that shell rc file. Wrappable names on this platform:
+        {wrappable}.
+    uninstall                     Remove installed shims (records are kept).
+    status                        Show install state (shims, PATH, records, shells).
+    service <enable|disable|status>
+        Daemon autostart for the current user: systemd --user (Linux),
+        a launchd LaunchAgent (macOS), or a Startup entry (Windows).
+    -h, --help                    Show this help (on stdout).
+    -V, --version                 Show the version.
+
+SHELL-SHIM MODE:
+    Invoked under a wrapped shell's name (e.g. ~/.cterm/bin/bash), this binary
+    runs the real shell under a PTY and records the session. Nested invocations
+    pass straight through (via the CTERM_WRAPPED marker) to avoid recursion and
+    loopback. Only interactive sessions are recorded by default; set
+    CTERM_FORCE_RECORD=1 to also record `-c`/`/c` and piped (non-tty) invocations.
+
+COMPANION BINARIES:
+    cterm-daemon  The agent-facing service. Serves a gRPC `Terminal` API on
+                  CTERM_ADDR (default 127.0.0.1:50051) and a local shim IPC
+                  endpoint on CTERM_SOCK. Persists to CTERM_DB. gRPC methods:
+                  Run, StreamExecution, SendInput, Interrupt, ListSessions,
+                  ListExecutions, GetExecution (see proto/cterm.proto).
+    cterm-web     Read-only web UI over the records on CTERM_WEB_ADDR
+                  (default 127.0.0.1:8088), reading CTERM_DB.
+
+ENVIRONMENT:
+    CTERM_DB            SQLite records path (daemon/web/shim; default cterm.db).
+    CTERM_ADDR          daemon gRPC listen address (default 127.0.0.1:50051).
+    CTERM_SOCK          shim<->daemon IPC endpoint (Unix socket path, or a
+                        Windows named pipe; default <home>/.cterm/run/daemon.sock).
+    CTERM_WEB_ADDR      cterm-web listen address (default 127.0.0.1:8088).
+    CTERM_FORCE_RECORD  record non-interactive shim invocations too.
+
+Docs & gRPC schema: https://github.com/maifeeulasad/cterm",
+        version = env!("CARGO_PKG_VERSION"),
+        wrappable = commands::WRAPPABLE.join(" "),
+    )
 }
