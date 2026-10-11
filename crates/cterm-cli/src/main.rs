@@ -4,13 +4,17 @@
 //! under a wrapped shell's name (e.g. as `~/.cterm/bin/bash`), it acts as that
 //! shell's wrapper. The dispatch is on `argv[0]`'s basename.
 
-#![forbid(unsafe_code)]
+// `deny` (not `forbid`) so the Windows console module can scope-allow the
+// unavoidable SetConsoleMode FFI; everything else stays unsafe-free.
+#![deny(unsafe_code)]
 
 mod commands;
 mod config;
 mod error;
 mod layout;
 mod service;
+#[cfg(windows)]
+mod win_console;
 mod wrapper;
 
 use std::path::Path;

@@ -177,6 +177,7 @@ dependencies = [
  "terminal_size",
  "thiserror",
  "tokio",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]

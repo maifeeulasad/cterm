@@ -26,5 +26,9 @@ tokio = { workspace = true, features = ["rt-multi-thread", "macros", "sync", "si
 nix = { version = "0.27.1", features = ["term", "signal"] }
 terminal_size = "0.3.0"
 
+[target.'cfg(windows)'.dependencies]
+terminal_size = "0.3.0"
+windows-sys = { version = "0.52.0", features = ["Win32_System_Console", "Win32_Foundation"] }
+
 [dev-dependencies]
 tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }

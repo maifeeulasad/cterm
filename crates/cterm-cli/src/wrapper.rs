@@ -372,7 +372,7 @@ fn exit_code(status: ExecutionStatus) -> i32 {
 
 /// Current terminal size as `(cols, rows)`, defaulting to 80x24.
 fn current_size() -> (u16, u16) {
-    #[cfg(unix)]
+    #[cfg(any(unix, windows))]
     {
         if let Some((terminal_size::Width(w), terminal_size::Height(h))) =
             terminal_size::terminal_size()
@@ -449,10 +449,24 @@ impl Drop for RawModeGuard {
     }
 }
 
-#[cfg(not(unix))]
+/// Puts the host console into raw + VT mode for the wrapper's lifetime
+/// (Windows). Restoration is handled by the inner guard's `Drop`.
+#[cfg(windows)]
+struct RawModeGuard {
+    _inner: crate::win_console::WinConsoleGuard,
+}
+
+#[cfg(windows)]
+impl RawModeGuard {
+    fn enable() -> Option<Self> {
+        crate::win_console::WinConsoleGuard::enable().map(|inner| Self { _inner: inner })
+    }
+}
+
+#[cfg(not(any(unix, windows)))]
 struct RawModeGuard;
 
-#[cfg(not(unix))]
+#[cfg(not(any(unix, windows)))]
 impl RawModeGuard {
     fn enable() -> Option<Self> {
         None

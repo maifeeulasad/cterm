@@ -80,6 +80,21 @@ cargo test
 Autostart (daemon on login): `cterm service enable` (systemd `--user` on Linux,
 a per-user Startup entry on Windows); undo with `cterm service disable`.
 
+## Acknowledgements
+
+The Windows host-console raw mode (`cterm-cli`'s `win_console`) adapts the
+console-mode flag choices from **[zhiburt/conpty](https://github.com/zhiburt/conpty)**
+(MIT, Copyright (c) 2021 Maxim Zhiburt) — its `console.rs` raw-stdin setup and
+`process.rs` VT-output-processing setup. We call the Win32 console API directly
+rather than vendoring the code. See that module's docs for details, including
+the limitations noted in the upstream library.
+
+Terminal PTYs use [portable-pty](https://github.com/wez/wezterm) (wezterm).
+Investigation note: ConPTY itself is **not** a bottleneck for the Windows
+limitations we hit — both portable-pty and zhiburt/conpty use the same OS
+`CreatePseudoConsole`; the issue was configuring the *host* console, which the
+`win_console` module now does.
+
 ## License
 
 GPL-3.0-or-later.

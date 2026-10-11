@@ -20,3 +20,6 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Vendored reference sources (studied, not built/committed)
+/vendor/
