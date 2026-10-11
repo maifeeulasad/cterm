@@ -1,24 +1,23 @@
-# cterm v0.1.5
+# cterm v0.2.0
 
 A terminal integration / shim tool that lets agents observe, record, stream, and
 drive shell command executions **without ever holding the credentials used to
 open the session**.
 
-> Early release. Working end to end on **Linux, macOS, and Windows**; shared for
-> feedback. Expect rough edges.
+> Early release. Now **tri-platform**; shared for feedback. Expect rough edges.
 
-## Changes since v0.1.4
+## 0.2.0 — tri-platform
 
-- **macOS support.** The CLI/shim, daemon (gRPC + Unix-socket IPC), storage, and
-  webview build and are tested on macOS in CI. Autostart uses a **launchd**
-  LaunchAgent (`cterm service enable`). Prebuilt binaries for **Apple Silicon
-  (arm64)** and **Intel (x86_64)** are attached below.
+cterm now runs on **Linux, macOS, and Windows** — all three are built and tested
+in CI, with signed, provenance-backed binaries for each. This minor bump marks
+that coverage milestone (adding macOS was a big expansion).
 
-## Earlier
-
-- **v0.1.4 — Windows hang fix:** portable-pty 0.9 enables
-  `PSEUDOCONSOLE_INHERIT_CURSOR`; ConPTY blocks on a cursor query (`ESC[6n`) until
-  the terminal replies. The PTY read loop now answers it (`ESC[1;1R`).
+- **macOS:** CLI/shim, daemon (gRPC + Unix-socket IPC), storage, and webview;
+  autostart via a **launchd** LaunchAgent; binaries for **Apple Silicon (arm64)**
+  and **Intel (x86_64)**.
+- Everything from 0.1.x: transparent shell shim, gRPC agent API, live
+  shim↔daemon IPC, SQLite records, webview, and daemon autostart (systemd /
+  launchd / Startup).
 
 ## Earlier
 
@@ -53,7 +52,7 @@ Binaries: `cterm` (CLI + shim), `cterm-daemon`, `cterm-web`.
 ### Linux (x86_64)
 
 ```bash
-VER=v0.1.5
+VER=v0.2.0
 curl -fsSL "https://github.com/maifeeulasad/cterm/releases/download/$VER/cterm-$VER-x86_64-linux.tar.gz" | tar -xz
 sudo install -m 0755 cterm cterm-daemon cterm-web /usr/local/bin/
 cterm --help
@@ -62,7 +61,7 @@ cterm --help
 ### macOS (Apple Silicon or Intel)
 
 ```bash
-VER=v0.1.5
+VER=v0.2.0
 ARCH=$([ "$(uname -m)" = "arm64" ] && echo aarch64 || echo x86_64)
 curl -fsSL "https://github.com/maifeeulasad/cterm/releases/download/$VER/cterm-$VER-$ARCH-macos.tar.gz" | tar -xz
 # Gatekeeper quarantines downloaded binaries; clear it, then install:
@@ -74,7 +73,7 @@ cterm --help
 ### Windows (x86_64, PowerShell)
 
 ```powershell
-$ver = "v0.1.5"
+$ver = "v0.2.0"
 Invoke-WebRequest "https://github.com/maifeeulasad/cterm/releases/download/$ver/cterm-$ver-x86_64-windows.zip" -OutFile cterm.zip
 Expand-Archive cterm.zip -DestinationPath "$env:LOCALAPPDATA\cterm" -Force
 # Add "$env:LOCALAPPDATA\cterm" to your PATH, then:
@@ -90,7 +89,7 @@ GitHub Actions). Verify that an archive was built by this repo's release
 workflow:
 
 ```bash
-gh attestation verify cterm-v0.1.5-x86_64-linux.tar.gz --repo maifeeulasad/cterm
+gh attestation verify cterm-v0.2.0-x86_64-linux.tar.gz --repo maifeeulasad/cterm
 ```
 
 ## Known limitations
