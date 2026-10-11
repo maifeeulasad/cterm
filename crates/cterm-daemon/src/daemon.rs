@@ -1,10 +1,10 @@
 //! The daemon core: the host-side authority over sessions and live runs.
 //!
-//! [`Daemon`] owns the [`RecordStore`] and a registry of in-flight runs keyed by
-//! execution id. Starting a run records it (via [`cterm_shim::start_recorded`]),
-//! registers a [`RunControl`] so later unary RPCs can reach it, and arranges for
-//! the entry to be removed when the run ends. The gRPC layer ([`crate::service`])
-//! is a thin adapter over this.
+//! [`Daemon`] owns the [`RecordStore`] and a registry of in-flight executions
+//! keyed by execution id. Entries are [`ExecutionHandle`]s, so the same
+//! machinery drives executions the daemon started itself (local PTY runs) and
+//! ones owned by a shim over IPC (see [`crate::ipc`]). The gRPC layer
+//! ([`crate::service`]) is a thin adapter over this.
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -14,22 +14,18 @@ use cterm_core::{
     Session, SessionId,
 };
 use cterm_proto::v1;
-use cterm_shim::{start_recorded, RunControl, RunSpec};
+use cterm_shim::{start_recorded, RunSpec};
 use tokio::sync::broadcast;
 
-/// Outcome of starting a run: the new execution id and a receiver that captured
-/// the live event stream from the very first event.
-pub struct Started {
-    /// The started execution's id.
-    pub execution: ExecutionId,
-    /// Live events, starting at `Started`.
-    pub events: broadcast::Receiver<ExecutionEvent>,
-}
+use crate::handle::ExecutionHandle;
+
+/// Registry of live executions and their control handles.
+pub(crate) type Registry = Arc<Mutex<HashMap<ExecutionId, Arc<dyn ExecutionHandle>>>>;
 
 /// The host-side daemon.
 pub struct Daemon<S: RecordStore> {
-    store: Arc<S>,
-    registry: Arc<Mutex<HashMap<ExecutionId, RunControl<S>>>>,
+    pub(crate) store: Arc<S>,
+    pub(crate) registry: Registry,
 }
 
 impl<S: RecordStore> Clone for Daemon<S> {
@@ -39,6 +35,15 @@ impl<S: RecordStore> Clone for Daemon<S> {
             registry: self.registry.clone(),
         }
     }
+}
+
+/// Outcome of starting a run: the new execution id and a receiver that captured
+/// the live event stream from the very first event.
+pub struct Started {
+    /// The started execution's id.
+    pub execution: ExecutionId,
+    /// Live events, starting at `Started`.
+    pub events: broadcast::Receiver<ExecutionEvent>,
 }
 
 impl<S: RecordStore + Send + Sync + 'static> Daemon<S> {
@@ -56,7 +61,23 @@ impl<S: RecordStore + Send + Sync + 'static> Daemon<S> {
         &self.store
     }
 
-    /// Starts a command under a PTY and begins recording it.
+    /// Registers a live execution handle.
+    pub(crate) fn register(&self, execution: ExecutionId, handle: Arc<dyn ExecutionHandle>) {
+        self.registry
+            .lock()
+            .expect("registry poisoned")
+            .insert(execution, handle);
+    }
+
+    /// Removes a live execution handle.
+    pub(crate) fn deregister(&self, execution: ExecutionId) {
+        self.registry
+            .lock()
+            .expect("registry poisoned")
+            .remove(&execution);
+    }
+
+    /// Starts a command under a PTY on this host and begins recording it.
     ///
     /// If `req.session` is empty a new local session is opened. Defaults:
     /// program `/bin/bash`, args `["-lc", <command>]`, 24x80.
@@ -87,33 +108,28 @@ impl<S: RecordStore + Send + Sync + 'static> Daemon<S> {
         let execution = run.execution();
         let events = run.take_primary().expect("primary available on a fresh run");
 
-        self.registry
-            .lock()
-            .expect("registry poisoned")
-            .insert(execution, run.control());
+        self.register(execution, Arc::new(run.control()));
 
         // Deregister when the run reaches a terminal status, even if the client
         // that started it has gone away.
-        let registry = self.registry.clone();
+        let daemon = self.clone();
         let done = run.done;
         tokio::spawn(async move {
             let _ = done.await;
-            registry.lock().expect("registry poisoned").remove(&execution);
+            daemon.deregister(execution);
         });
 
         Ok(Started { execution, events })
     }
 
-    /// Writes input to a running execution.
+    /// Writes input to a live execution.
     pub async fn send_input(&self, execution: ExecutionId, data: Vec<u8>) -> Result<()> {
-        let control = self.control(execution)?;
-        control.send_input(data).await
+        self.handle(execution)?.send_input(data).await
     }
 
-    /// Interrupts a running execution.
+    /// Interrupts a live execution.
     pub async fn interrupt(&self, execution: ExecutionId) -> Result<()> {
-        let control = self.control(execution)?;
-        control.interrupt().await
+        self.handle(execution)?.interrupt().await
     }
 
     /// Subscribes to the live events of a currently-running execution, if any.
@@ -123,7 +139,7 @@ impl<S: RecordStore + Send + Sync + 'static> Daemon<S> {
             .lock()
             .expect("registry poisoned")
             .get(&execution)
-            .map(RunControl::subscribe)
+            .map(|h| h.subscribe())
     }
 
     /// All known sessions, most recent first.
@@ -153,13 +169,13 @@ impl<S: RecordStore + Send + Sync + 'static> Daemon<S> {
         Ok(Some((record, chunks)))
     }
 
-    fn control(&self, execution: ExecutionId) -> Result<RunControl<S>> {
+    fn handle(&self, execution: ExecutionId) -> Result<Arc<dyn ExecutionHandle>> {
         self.registry
             .lock()
             .expect("registry poisoned")
             .get(&execution)
             .cloned()
-            .ok_or_else(|| Error::NotFound(format!("no running execution {execution}")))
+            .ok_or_else(|| Error::NotFound(format!("no live execution {execution}")))
     }
 
     async fn resolve_session(&self, req: &v1::RunRequest) -> Result<SessionId> {

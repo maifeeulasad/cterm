@@ -21,10 +21,12 @@ cterm-core.workspace = true
 cterm-proto.workspace = true
 cterm-shim.workspace = true
 cterm-storage.workspace = true
+cterm-ipc.workspace = true
 tonic.workspace = true
 prost.workspace = true
-tokio = { workspace = true, features = ["rt-multi-thread", "macros", "net", "sync", "signal", "time"] }
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "net", "sync", "signal", "time", "io-util"] }
 async-stream.workspace = true
+async-trait.workspace = true
 futures-core.workspace = true
 
 [dev-dependencies]

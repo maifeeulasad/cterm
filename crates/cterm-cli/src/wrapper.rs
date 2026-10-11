@@ -56,7 +56,173 @@ fn try_record(name: &str, args: &[String]) -> CliResult<i32> {
     runtime.block_on(record_session(&cfg.db, name, &real, args))
 }
 
+/// Records the session live to the daemon over IPC if it is reachable;
+/// otherwise records straight to the local SQLite database.
 async fn record_session(db: &str, name: &str, real: &str, args: &[String]) -> CliResult<i32> {
+    #[cfg(unix)]
+    {
+        if let Some(code) = try_ipc_session(name, real, args).await? {
+            return Ok(code);
+        }
+    }
+    record_session_db(db, name, real, args).await
+}
+
+/// Runs the session under a PTY, forwarding everything live to the daemon over
+/// the IPC socket and applying control (input/interrupt/resize) it sends back.
+/// Returns `Ok(None)` if the daemon socket is not reachable (caller falls back
+/// to local recording).
+#[cfg(unix)]
+async fn try_ipc_session(name: &str, real: &str, args: &[String]) -> CliResult<Option<i32>> {
+    use cterm_ipc::{read_msg, write_msg, DaemonToShim, ShimToDaemon, PROTOCOL_VERSION};
+    use cterm_storage::NullStore;
+    use tokio::io::AsyncWriteExt;
+
+    let Some(sock) = cterm_ipc::default_socket_path() else {
+        return Ok(None);
+    };
+    let stream = match tokio::net::UnixStream::connect(&sock).await {
+        Ok(s) => s,
+        Err(_) => return Ok(None), // daemon not running -> fall back to DB
+    };
+    let (mut read_half, mut write_half) = stream.into_split();
+
+    // The daemon persists; the shim keeps no local copy.
+    let store = std::sync::Arc::new(NullStore::new());
+    let session = Session::open(Host::local(), name);
+
+    let (cols, rows) = current_size();
+    let mut spec = RunSpec::new(real.to_owned(), args.to_vec());
+    spec.rows = rows;
+    spec.cols = cols;
+    let raw = format!("{name} {}", args.join(" "));
+    let command = Command::new(raw.trim().to_owned(), name);
+
+    let mut run = start_recorded(store, session.id, command, spec)
+        .await
+        .map_err(|e| CliError::Msg(e.to_string()))?;
+    let execution = run.execution();
+    let mut events = run.take_primary().expect("primary on a fresh run");
+
+    // Register the session with the daemon before streaming events.
+    write_msg(
+        &mut write_half,
+        &ShimToDaemon::Hello {
+            version: PROTOCOL_VERSION,
+            session: session.clone(),
+        },
+    )
+    .await
+    .map_err(|e| CliError::Msg(e.to_string()))?;
+
+    // Outbound frames to the daemon go through one writer task.
+    let (tx, mut tx_rx) = tokio::sync::mpsc::unbounded_channel::<ShimToDaemon>();
+    let writer = tokio::spawn(async move {
+        while let Some(msg) = tx_rx.recv().await {
+            if write_msg(&mut write_half, &msg).await.is_err() {
+                break;
+            }
+        }
+    });
+
+    let _raw_guard = RawModeGuard::enable();
+
+    // Local stdin (the human) -> the PTY.
+    let (in_tx, mut in_rx) = tokio::sync::mpsc::unbounded_channel::<Vec<u8>>();
+    std::thread::spawn(move || {
+        use std::io::Read;
+        let mut stdin = std::io::stdin();
+        let mut buf = [0u8; 4096];
+        loop {
+            match stdin.read(&mut buf) {
+                Ok(0) => break,
+                Ok(n) => {
+                    if in_tx.send(buf[..n].to_vec()).is_err() {
+                        break;
+                    }
+                }
+                Err(_) => break,
+            }
+        }
+    });
+    let in_control = run.control();
+    let in_task = tokio::spawn(async move {
+        while let Some(data) = in_rx.recv().await {
+            let _ = in_control.send_input(data).await;
+        }
+    });
+
+    // Daemon -> shim control (agent input / interrupt / resize).
+    let ctrl = run.control();
+    let ctrl_task = tokio::spawn(async move {
+        loop {
+            match read_msg::<_, DaemonToShim>(&mut read_half).await {
+                Ok(Some(DaemonToShim::Input { data, .. })) => {
+                    let _ = ctrl.send_input(data).await;
+                }
+                Ok(Some(DaemonToShim::Interrupt { .. })) => {
+                    let _ = ctrl.interrupt().await;
+                }
+                Ok(Some(DaemonToShim::Resize { rows, cols, .. })) => {
+                    let _ = ctrl.resize(rows, cols);
+                }
+                Ok(None) | Err(_) => break,
+            }
+        }
+    });
+
+    // SIGWINCH -> resize the PTY.
+    let resize_ctrl = run.control();
+    let winch_task = tokio::spawn(async move {
+        if let Ok(mut winch) =
+            tokio::signal::unix::signal(tokio::signal::unix::SignalKind::window_change())
+        {
+            while winch.recv().await.is_some() {
+                let (cols, rows) = current_size();
+                let _ = resize_ctrl.resize(rows, cols);
+            }
+        }
+    });
+
+    // Consume events: write output to the human, forward everything to the daemon.
+    let mut stdout = tokio::io::stdout();
+    let status = loop {
+        match events.recv().await {
+            Ok(ExecutionEvent::Started(record)) => {
+                let _ = tx.send(ShimToDaemon::Started { record });
+            }
+            Ok(ExecutionEvent::Chunk(chunk)) => {
+                if chunk.kind == StreamKind::Stdout {
+                    let _ = stdout.write_all(&chunk.data).await;
+                    let _ = stdout.flush().await;
+                }
+                let _ = tx.send(ShimToDaemon::Chunk { chunk });
+            }
+            Ok(ExecutionEvent::Status(s)) => {
+                let _ = tx.send(ShimToDaemon::Status { execution, status: s });
+                break s;
+            }
+            Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
+            Err(tokio::sync::broadcast::error::RecvError::Closed) => break ExecutionStatus::Failed,
+        }
+    };
+
+    let _ = run.done.await;
+    let _ = tx.send(ShimToDaemon::SessionClosed {
+        session: session.id,
+        status: SessionStatus::Closed,
+    });
+
+    in_task.abort();
+    ctrl_task.abort();
+    winch_task.abort();
+    drop(tx);
+    let _ = writer.await;
+
+    Ok(Some(exit_code(status)))
+}
+
+async fn record_session_db(db: &str, name: &str, real: &str, args: &[String]) -> CliResult<i32> {
     let store = Arc::new(SqliteStore::open(db).map_err(|e| CliError::Msg(e.to_string()))?);
 
     let mut session = Session::open(Host::local(), name);

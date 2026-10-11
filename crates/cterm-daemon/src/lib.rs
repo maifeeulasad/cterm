@@ -9,9 +9,13 @@
 #![warn(missing_docs)]
 
 pub mod daemon;
+pub mod handle;
+#[cfg(unix)]
+pub mod ipc;
 pub mod service;
 
 pub use daemon::{Daemon, Started};
+pub use handle::ExecutionHandle;
 pub use service::TerminalService;
 
 use cterm_core::RecordStore;

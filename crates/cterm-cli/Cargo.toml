@@ -16,10 +16,11 @@ path = "src/main.rs"
 cterm-core.workspace = true
 cterm-storage.workspace = true
 cterm-shim.workspace = true
+cterm-ipc.workspace = true
 serde = { workspace = true }
 serde_json.workspace = true
 thiserror.workspace = true
-tokio = { workspace = true, features = ["rt-multi-thread", "macros", "sync", "signal", "io-std", "io-util", "time"] }
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "sync", "signal", "net", "io-std", "io-util", "time"] }
 
 [target.'cfg(unix)'.dependencies]
 nix = { version = "0.27.1", features = ["term", "signal"] }
