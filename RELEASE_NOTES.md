@@ -1,10 +1,27 @@
-# cterm v0.2.0
+# cterm v0.2.1
 
 A terminal integration / shim tool that lets agents observe, record, stream, and
 drive shell command executions **without ever holding the credentials used to
 open the session**.
 
-> Early release. Now **tri-platform**; shared for feedback. Expect rough edges.
+> Early release. Tri-platform; shared for feedback. Expect rough edges.
+
+## 0.2.1 — broader shells, no loopback
+
+- **More shells.** The shim can now wrap a wide set per platform: Linux/macOS —
+  `bash zsh sh dash fish ksh tcsh csh ash mksh nu elvish xonsh pwsh`; Windows —
+  `cmd powershell pwsh bash sh zsh fish nu ksh`. (The shim is shell-agnostic — it
+  just runs the real program under a PTY — so coverage is about which names it
+  intercepts.) Default install stays the common interactive shells.
+- **Loopback / infinite-recursion guard.** Every PTY-spawned process tree is
+  marked (`CTERM_WRAPPED`); a shim invoked anywhere beneath a cterm session
+  passes straight through to the real shell instead of wrapping again. This stops
+  a wrapped shell's subshells, scripts, and command substitutions from endlessly
+  re-wrapping and re-connecting to the daemon.
+- **Only interactive sessions are recorded** by default: `-c`/`/c` command
+  invocations and piped (non-tty) input pass through unrecorded, cutting noise
+  from scripts and tooling. Plus a self-exec guard so the real shell can never
+  resolve back to the shim.
 
 ## 0.2.0 — tri-platform
 
@@ -52,7 +69,7 @@ Binaries: `cterm` (CLI + shim), `cterm-daemon`, `cterm-web`.
 ### Linux (x86_64)
 
 ```bash
-VER=v0.2.0
+VER=v0.2.1
 curl -fsSL "https://github.com/maifeeulasad/cterm/releases/download/$VER/cterm-$VER-x86_64-linux.tar.gz" | tar -xz
 sudo install -m 0755 cterm cterm-daemon cterm-web /usr/local/bin/
 cterm --help
@@ -61,7 +78,7 @@ cterm --help
 ### macOS (Apple Silicon or Intel)
 
 ```bash
-VER=v0.2.0
+VER=v0.2.1
 ARCH=$([ "$(uname -m)" = "arm64" ] && echo aarch64 || echo x86_64)
 curl -fsSL "https://github.com/maifeeulasad/cterm/releases/download/$VER/cterm-$VER-$ARCH-macos.tar.gz" | tar -xz
 # Gatekeeper quarantines downloaded binaries; clear it, then install:
@@ -73,7 +90,7 @@ cterm --help
 ### Windows (x86_64, PowerShell)
 
 ```powershell
-$ver = "v0.2.0"
+$ver = "v0.2.1"
 Invoke-WebRequest "https://github.com/maifeeulasad/cterm/releases/download/$ver/cterm-$ver-x86_64-windows.zip" -OutFile cterm.zip
 Expand-Archive cterm.zip -DestinationPath "$env:LOCALAPPDATA\cterm" -Force
 # Add "$env:LOCALAPPDATA\cterm" to your PATH, then:
@@ -89,7 +106,7 @@ GitHub Actions). Verify that an archive was built by this repo's release
 workflow:
 
 ```bash
-gh attestation verify cterm-v0.2.0-x86_64-linux.tar.gz --repo maifeeulasad/cterm
+gh attestation verify cterm-v0.2.1-x86_64-linux.tar.gz --repo maifeeulasad/cterm
 ```
 
 ## Known limitations

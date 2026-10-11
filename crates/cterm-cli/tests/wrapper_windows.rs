@@ -49,8 +49,12 @@ fn wrapper_runs_real_cmd_transparently_and_records() {
     .unwrap();
 
     // Invoke the shim as cmd. HOME steers Layout::default_home to our temp dir.
+    // Force recording: `/c` + piped stdin is otherwise a non-interactive
+    // pass-through.
     let output = Command::new(&shim)
         .env("HOME", &home)
+        .env("CTERM_FORCE_RECORD", "1")
+        .env_remove("CTERM_WRAPPED")
         .args(["/c", "echo WRAP_WIN & exit 0"])
         .output()
         .expect("run shim");

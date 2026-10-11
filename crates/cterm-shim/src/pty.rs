@@ -88,6 +88,11 @@ impl PtySession {
         for (k, v) in spec.env {
             cmd.env(k, v);
         }
+        // Mark this process tree as already inside a cterm session. A shim
+        // (the PATH wrapper) invoked anywhere beneath here sees this and passes
+        // straight through to the real shell instead of wrapping again — which
+        // is what prevents infinite recursion and nested-recording loopback.
+        cmd.env(crate::WRAPPED_MARKER_ENV, "1");
 
         let child = pair
             .slave

@@ -10,6 +10,12 @@
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
+/// Environment variable set on every PTY-spawned process tree to mark that a
+/// cterm session is already active. The PATH shim checks it and passes through
+/// to the real shell when set, preventing nested re-wrapping (infinite
+/// recursion / loopback).
+pub const WRAPPED_MARKER_ENV: &str = "CTERM_WRAPPED";
+
 pub mod pty;
 pub mod runner;
 
