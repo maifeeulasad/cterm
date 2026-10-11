@@ -13,7 +13,9 @@
 #![warn(missing_docs)]
 
 pub mod memory;
+pub mod null;
 pub mod sqlite;
 
 pub use memory::MemoryStore;
+pub use null::NullStore;
 pub use sqlite::SqliteStore;
