@@ -1,4 +1,4 @@
-# cterm v0.1.0
+# cterm v0.1.1
 
 First tagged release of **cterm** — a terminal integration / shim tool that lets
 agents observe, record, stream, and drive shell command executions **without
@@ -32,7 +32,7 @@ Binaries: `cterm` (CLI + shim), `cterm-daemon`, `cterm-web`.
 ### Linux (x86_64)
 
 ```bash
-VER=v0.1.0
+VER=v0.1.1
 curl -fsSL "https://github.com/maifeeulasad/cterm/releases/download/$VER/cterm-$VER-x86_64-linux.tar.gz" | tar -xz
 sudo install -m 0755 cterm cterm-daemon cterm-web /usr/local/bin/
 cterm --help
@@ -41,7 +41,7 @@ cterm --help
 ### Windows (x86_64, PowerShell)
 
 ```powershell
-$ver = "v0.1.0"
+$ver = "v0.1.1"
 Invoke-WebRequest "https://github.com/maifeeulasad/cterm/releases/download/$ver/cterm-$ver-x86_64-windows.zip" -OutFile cterm.zip
 Expand-Archive cterm.zip -DestinationPath "$env:LOCALAPPDATA\cterm" -Force
 # Add "$env:LOCALAPPDATA\cterm" to your PATH, then:
@@ -57,7 +57,7 @@ GitHub Actions). Verify that an archive was built by this repo's release
 workflow:
 
 ```bash
-gh attestation verify cterm-v0.1.0-x86_64-linux.tar.gz --repo maifeeulasad/cterm
+gh attestation verify cterm-v0.1.1-x86_64-linux.tar.gz --repo maifeeulasad/cterm
 ```
 
 ## Known limitations
