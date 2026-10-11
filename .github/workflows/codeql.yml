@@ -13,6 +13,7 @@ permissions:
 
 jobs:
   analyze:
+    if: ${{ github.actor != 'dependabot[bot]' }}
     name: Analyze (Rust)
     runs-on: ubuntu-latest
     permissions:

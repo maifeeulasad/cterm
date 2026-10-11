@@ -24,7 +24,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.1.1"
+version = "0.1.2"
 edition = "2021"
 rust-version = "1.75"
 license = "GPL-3.0-or-later"
@@ -41,15 +41,17 @@ async-trait = "0.1.77"
 tokio = { version = "1.36.0", features = ["rt", "rt-multi-thread", "sync", "macros", "io-util", "net", "time", "process", "signal"] }
 rusqlite = { version = "0.31.0", features = ["bundled"] }
 portable-pty = "0.8.1"
-tonic = "0.11.0"
-prost = "0.12.3"
-tonic-build = "0.11.0"
+# Upgraded to the hyper 1.x stack (h2 0.4.16+) to resolve RUSTSEC-2026-0258.
+# tonic 0.14 split prost codegen into tonic-prost-build and the codec into tonic-prost.
+tonic = "0.14"
+prost = "0.14"
+tonic-prost = "0.14"
+tonic-prost-build = "0.14"
 futures-core = "0.3.30"
 tokio-stream = "0.1.14"
 async-stream = "0.3.5"
-axum = "0.6.20"
-tower = "0.4.13"
-hyper = "0.14.28"
+axum = "0.8"
+tower = "0.5"
 
 # Local crates
 cterm-core = { path = "crates/cterm-core" }

@@ -11,8 +11,9 @@ description = "gRPC/protobuf contract for cterm (tonic), plus core<->proto conve
 [dependencies]
 cterm-core.workspace = true
 tonic.workspace = true
+tonic-prost.workspace = true
 prost.workspace = true
 time.workspace = true
 
 [build-dependencies]
-tonic-build.workspace = true
+tonic-prost-build.workspace = true

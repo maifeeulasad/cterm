@@ -26,5 +26,4 @@ tokio = { workspace = true, features = ["rt-multi-thread", "macros", "net"] }
 
 [dev-dependencies]
 tower = { workspace = true, features = ["util"] }
-hyper.workspace = true
 tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }

@@ -1,11 +1,18 @@
-# cterm v0.1.1
+# cterm v0.1.2
 
-First tagged release of **cterm** — a terminal integration / shim tool that lets
-agents observe, record, stream, and drive shell command executions **without
-ever holding the credentials used to open the session**.
+A terminal integration / shim tool that lets agents observe, record, stream, and
+drive shell command executions **without ever holding the credentials used to
+open the session**.
 
 > Early release. Working end to end on **Linux and Windows**; shared for
 > feedback. Expect rough edges.
+
+## Changes since v0.1.1
+
+- **Security:** upgraded the HTTP stack to **hyper 1.x / tonic 0.14 / axum 0.8 /
+  tower 0.5** (pulling `h2` ≥ 0.4.20), resolving **RUSTSEC-2026-0258** (`h2`
+  unbounded empty DATA frames, DoS).
+- CI/CodeQL/audit workflows no longer run on Dependabot-authored events.
 
 ## Highlights
 
@@ -32,7 +39,7 @@ Binaries: `cterm` (CLI + shim), `cterm-daemon`, `cterm-web`.
 ### Linux (x86_64)
 
 ```bash
-VER=v0.1.1
+VER=v0.1.2
 curl -fsSL "https://github.com/maifeeulasad/cterm/releases/download/$VER/cterm-$VER-x86_64-linux.tar.gz" | tar -xz
 sudo install -m 0755 cterm cterm-daemon cterm-web /usr/local/bin/
 cterm --help
@@ -41,7 +48,7 @@ cterm --help
 ### Windows (x86_64, PowerShell)
 
 ```powershell
-$ver = "v0.1.1"
+$ver = "v0.1.2"
 Invoke-WebRequest "https://github.com/maifeeulasad/cterm/releases/download/$ver/cterm-$ver-x86_64-windows.zip" -OutFile cterm.zip
 Expand-Archive cterm.zip -DestinationPath "$env:LOCALAPPDATA\cterm" -Force
 # Add "$env:LOCALAPPDATA\cterm" to your PATH, then:
@@ -57,7 +64,7 @@ GitHub Actions). Verify that an archive was built by this repo's release
 workflow:
 
 ```bash
-gh attestation verify cterm-v0.1.1-x86_64-linux.tar.gz --repo maifeeulasad/cterm
+gh attestation verify cterm-v0.1.2-x86_64-linux.tar.gz --repo maifeeulasad/cterm
 ```
 
 ## Known limitations

@@ -18,7 +18,9 @@ async fn get_json(app: &axum::Router, uri: &str) -> (u16, serde_json::Value) {
         .await
         .unwrap();
     let status = resp.status().as_u16();
-    let bytes = hyper::body::to_bytes(resp.into_body()).await.unwrap();
+    let bytes = axum::body::to_bytes(resp.into_body(), usize::MAX)
+        .await
+        .unwrap();
     let json = if bytes.is_empty() {
         serde_json::Value::Null
     } else {

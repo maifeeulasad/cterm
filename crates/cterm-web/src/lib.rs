@@ -31,9 +31,9 @@ pub fn router(store: Store) -> Router {
     Router::new()
         .route("/", get(index))
         .route("/api/sessions", get(list_sessions))
-        .route("/api/sessions/:id/executions", get(session_executions))
-        .route("/api/executions/:id", get(get_execution))
-        .route("/api/executions/:id/transcript", get(transcript))
+        .route("/api/sessions/{id}/executions", get(session_executions))
+        .route("/api/executions/{id}", get(get_execution))
+        .route("/api/executions/{id}/transcript", get(transcript))
         .with_state(store)
 }
 
