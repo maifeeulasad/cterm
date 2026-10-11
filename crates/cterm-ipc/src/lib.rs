@@ -18,7 +18,9 @@ use std::io;
 #[cfg(not(windows))]
 use std::path::PathBuf;
 
-use cterm_core::{ExecutionId, ExecutionRecord, ExecutionStatus, SessionId, SessionStatus, StreamChunk};
+use cterm_core::{
+    ExecutionId, ExecutionRecord, ExecutionStatus, SessionId, SessionStatus, StreamChunk,
+};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
@@ -97,7 +99,8 @@ where
     W: AsyncWrite + Unpin,
     T: Serialize,
 {
-    let bytes = serde_json::to_vec(msg).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+    let bytes =
+        serde_json::to_vec(msg).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
     if bytes.len() > MAX_FRAME {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
@@ -132,7 +135,8 @@ where
     }
     let mut buf = vec![0u8; len];
     r.read_exact(&mut buf).await?;
-    let msg = serde_json::from_slice(&buf).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+    let msg =
+        serde_json::from_slice(&buf).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
     Ok(Some(msg))
 }
 

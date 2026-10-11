@@ -19,8 +19,8 @@ use cterm_core::{
 use cterm_shim::{start_recorded, RunSpec};
 use cterm_storage::SqliteStore;
 
-use crate::config;
 use crate::commands;
+use crate::config;
 use crate::error::{CliError, CliResult};
 use crate::layout::Layout;
 
@@ -230,7 +230,10 @@ where
                 let _ = tx.send(ShimToDaemon::Chunk { chunk });
             }
             Ok(ExecutionEvent::Status(s)) => {
-                let _ = tx.send(ShimToDaemon::Status { execution, status: s });
+                let _ = tx.send(ShimToDaemon::Status {
+                    execution,
+                    status: s,
+                });
                 break s;
             }
             Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,

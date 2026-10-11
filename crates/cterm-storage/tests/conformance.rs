@@ -27,11 +27,17 @@ async fn exercise<S: RecordStore>(store: S) {
     store.put_session(&sess_b).await.unwrap();
 
     // Round-trip a session.
-    assert_eq!(store.get_session(sess_a.id).await.unwrap().as_ref(), Some(&sess_a));
+    assert_eq!(
+        store.get_session(sess_a.id).await.unwrap().as_ref(),
+        Some(&sess_a)
+    );
 
     // list_sessions: most recently opened first (b before a).
     let sessions = store.list_sessions().await.unwrap();
-    assert_eq!(sessions.iter().map(|s| s.id).collect::<Vec<_>>(), vec![sess_b.id, sess_a.id]);
+    assert_eq!(
+        sessions.iter().map(|s| s.id).collect::<Vec<_>>(),
+        vec![sess_b.id, sess_a.id]
+    );
 
     // --- Executions: two in A (out of insertion order), one in B. ---
     let mut e1 = ExecutionRecord::open(sess_a.id, Command::new("echo first", "zsh"));
@@ -47,7 +53,10 @@ async fn exercise<S: RecordStore>(store: S) {
     store.put_execution(&e_other).await.unwrap();
 
     let in_a = store.list_executions(sess_a.id).await.unwrap();
-    assert_eq!(in_a.iter().map(|e| e.id).collect::<Vec<_>>(), vec![e1.id, e2.id]);
+    assert_eq!(
+        in_a.iter().map(|e| e.id).collect::<Vec<_>>(),
+        vec![e1.id, e2.id]
+    );
     assert_eq!(store.list_executions(sess_b.id).await.unwrap().len(), 1);
 
     // Updating an execution in place (status transition) must overwrite.
@@ -67,12 +76,20 @@ async fn exercise<S: RecordStore>(store: S) {
             .unwrap();
     }
     let chunks = store.load_chunks(e1.id).await.unwrap();
-    assert_eq!(chunks.iter().map(|c| c.seq).collect::<Vec<_>>(), vec![0, 1, 2]);
+    assert_eq!(
+        chunks.iter().map(|c| c.seq).collect::<Vec<_>>(),
+        vec![0, 1, 2]
+    );
     assert_eq!(chunks[0].data, vec![b'0']);
 
     // Non-UTF-8 bytes survive the round trip.
     store
-        .append_chunk(&StreamChunk::now(e1.id, StreamKind::Stderr, 3, vec![0xff, 0x00]))
+        .append_chunk(&StreamChunk::now(
+            e1.id,
+            StreamKind::Stderr,
+            3,
+            vec![0xff, 0x00],
+        ))
         .await
         .unwrap();
     let chunks = store.load_chunks(e1.id).await.unwrap();
@@ -81,13 +98,24 @@ async fn exercise<S: RecordStore>(store: S) {
     // --- Absence is None, not an error. ---
     use cterm_core::{ExecutionId, SessionId};
     assert!(store.get_session(SessionId::new()).await.unwrap().is_none());
-    assert!(store.get_execution(ExecutionId::new()).await.unwrap().is_none());
-    assert!(store.load_chunks(ExecutionId::new()).await.unwrap().is_empty());
+    assert!(store
+        .get_execution(ExecutionId::new())
+        .await
+        .unwrap()
+        .is_none());
+    assert!(store
+        .load_chunks(ExecutionId::new())
+        .await
+        .unwrap()
+        .is_empty());
 
     // Closing a session persists the terminal status.
     sess_a.close(SessionStatus::Closed);
     store.put_session(&sess_a).await.unwrap();
-    assert_eq!(store.get_session(sess_a.id).await.unwrap().unwrap().status, SessionStatus::Closed);
+    assert_eq!(
+        store.get_session(sess_a.id).await.unwrap().unwrap().status,
+        SessionStatus::Closed
+    );
 }
 
 #[tokio::test]

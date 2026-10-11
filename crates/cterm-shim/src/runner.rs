@@ -43,7 +43,10 @@ pub struct RunSpec {
 impl RunSpec {
     /// A spec with a default 24x80 terminal and inherited cwd.
     #[must_use]
-    pub fn new(program: impl Into<String>, args: impl IntoIterator<Item = impl Into<String>>) -> Self {
+    pub fn new(
+        program: impl Into<String>,
+        args: impl IntoIterator<Item = impl Into<String>>,
+    ) -> Self {
         Self {
             program: program.into(),
             args: args.into_iter().map(Into::into).collect(),

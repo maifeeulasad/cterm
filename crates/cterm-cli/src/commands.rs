@@ -64,8 +64,7 @@ fn executable_names(name: &str) -> Vec<String> {
         if Path::new(name).extension().is_some() {
             return vec![name.to_owned()];
         }
-        let pathext =
-            std::env::var("PATHEXT").unwrap_or_else(|_| ".COM;.EXE;.BAT;.CMD".to_owned());
+        let pathext = std::env::var("PATHEXT").unwrap_or_else(|_| ".COM;.EXE;.BAT;.CMD".to_owned());
         let mut names: Vec<String> = pathext
             .split(';')
             .filter(|e| !e.is_empty())

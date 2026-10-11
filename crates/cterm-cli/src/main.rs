@@ -87,10 +87,7 @@ fn cmd_install(args: &[String]) -> i32 {
     let layout = layout_or_die();
     match commands::install(&layout, &shells) {
         Ok(installed) => {
-            println!(
-                "Installed cterm shims for: {}",
-                installed.shims.join(", ")
-            );
+            println!("Installed cterm shims for: {}", installed.shims.join(", "));
             for (name, real) in &installed.config.shells {
                 println!("  {name} -> {real}");
             }
@@ -98,7 +95,9 @@ fn cmd_install(args: &[String]) -> i32 {
             println!();
             if let Some(rc_path) = rc {
                 match commands::append_rc(Path::new(&rc_path), &layout) {
-                    Ok(true) => println!("Added PATH entry to {rc_path}. Open a new shell to activate."),
+                    Ok(true) => {
+                        println!("Added PATH entry to {rc_path}. Open a new shell to activate.")
+                    }
                     Ok(false) => println!("{rc_path} already contains the cterm PATH entry."),
                     Err(e) => {
                         eprintln!("cterm: could not update {rc_path}: {e}");
@@ -122,7 +121,10 @@ fn cmd_uninstall() -> i32 {
     let layout = layout_or_die();
     match commands::uninstall(&layout) {
         Ok(removed) if removed.is_empty() => {
-            println!("Nothing to uninstall (no shims at {}).", layout.bin_dir().display());
+            println!(
+                "Nothing to uninstall (no shims at {}).",
+                layout.bin_dir().display()
+            );
             0
         }
         Ok(removed) => {

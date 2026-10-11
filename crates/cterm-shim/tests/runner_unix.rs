@@ -64,7 +64,9 @@ async fn records_input_and_evaluates_it() {
     .expect("start");
     let exec = run.execution();
 
-    run.send_input(b"echo val-$((6*7))\n".to_vec()).await.unwrap();
+    run.send_input(b"echo val-$((6*7))\n".to_vec())
+        .await
+        .unwrap();
     run.send_input(b"exit\n".to_vec()).await.unwrap();
 
     let status = run.done.await.expect("join").expect("run result");

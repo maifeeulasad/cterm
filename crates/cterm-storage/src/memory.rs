@@ -72,7 +72,7 @@ impl RecordStore for MemoryStore {
     async fn list_sessions(&self) -> Result<Vec<Session>> {
         let mut v: Vec<Session> = self.lock()?.sessions.values().cloned().collect();
         // Most recently opened first.
-        v.sort_by(|a, b| b.opened_at.cmp(&a.opened_at));
+        v.sort_by_key(|s| std::cmp::Reverse(s.opened_at));
         Ok(v)
     }
 
@@ -85,7 +85,7 @@ impl RecordStore for MemoryStore {
             .cloned()
             .collect();
         // Oldest first.
-        v.sort_by(|a, b| a.started_at.cmp(&b.started_at));
+        v.sort_by_key(|e| e.started_at);
         Ok(v)
     }
 

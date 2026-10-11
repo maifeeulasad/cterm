@@ -106,7 +106,9 @@ impl<S: RecordStore + Send + Sync + 'static> Daemon<S> {
 
         let mut run = start_recorded(self.store.clone(), session, command, spec).await?;
         let execution = run.execution();
-        let events = run.take_primary().expect("primary available on a fresh run");
+        let events = run
+            .take_primary()
+            .expect("primary available on a fresh run");
 
         self.register(execution, Arc::new(run.control()));
 

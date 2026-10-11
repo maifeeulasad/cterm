@@ -8,7 +8,9 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use cterm_core::{Command, ExecutionRecord, ExecutionStatus, Host, Session, StreamChunk, StreamKind};
+use cterm_core::{
+    Command, ExecutionRecord, ExecutionStatus, Host, Session, StreamChunk, StreamKind,
+};
 use cterm_daemon::{terminal_server, Daemon};
 use cterm_ipc::{read_msg, write_msg, DaemonToShim, ShimToDaemon, PROTOCOL_VERSION};
 use cterm_proto::v1;
@@ -107,12 +109,23 @@ where
     record.transition(ExecutionStatus::Running);
     let execution = record.id;
 
-    write_msg(&mut shim, &ShimToDaemon::Hello { version: PROTOCOL_VERSION, session: session.clone() })
-        .await
-        .unwrap();
-    write_msg(&mut shim, &ShimToDaemon::Started { record: record.clone() })
-        .await
-        .unwrap();
+    write_msg(
+        &mut shim,
+        &ShimToDaemon::Hello {
+            version: PROTOCOL_VERSION,
+            session: session.clone(),
+        },
+    )
+    .await
+    .unwrap();
+    write_msg(
+        &mut shim,
+        &ShimToDaemon::Started {
+            record: record.clone(),
+        },
+    )
+    .await
+    .unwrap();
 
     // Agent connects; wait until the daemon has the execution recorded.
     let mut client = connect_client(&url).await;
@@ -120,7 +133,9 @@ where
     let mut ready = false;
     for _ in 0..100 {
         if client
-            .get_execution(v1::GetExecutionRequest { execution: exec_str.clone() })
+            .get_execution(v1::GetExecutionRequest {
+                execution: exec_str.clone(),
+            })
             .await
             .is_ok()
         {
@@ -133,7 +148,10 @@ where
 
     // Agent opens a live stream (subscribes before we send more events).
     let mut stream = client
-        .stream_execution(v1::StreamExecutionRequest { execution: exec_str.clone(), replay: false })
+        .stream_execution(v1::StreamExecutionRequest {
+            execution: exec_str.clone(),
+            replay: false,
+        })
         .await
         .unwrap()
         .into_inner();
@@ -164,14 +182,20 @@ where
 
     // Agent sends input -> it must arrive at the shim.
     client
-        .send_input(v1::SendInputRequest { execution: exec_str.clone(), data: b"whoami\n".to_vec() })
+        .send_input(v1::SendInputRequest {
+            execution: exec_str.clone(),
+            data: b"whoami\n".to_vec(),
+        })
         .await
         .unwrap();
-    let got = tokio::time::timeout(Duration::from_secs(5), read_msg::<_, DaemonToShim>(&mut shim))
-        .await
-        .expect("timed out waiting for input at shim")
-        .unwrap()
-        .unwrap();
+    let got = tokio::time::timeout(
+        Duration::from_secs(5),
+        read_msg::<_, DaemonToShim>(&mut shim),
+    )
+    .await
+    .expect("timed out waiting for input at shim")
+    .unwrap()
+    .unwrap();
     match got {
         DaemonToShim::Input { execution: e, data } => {
             assert_eq!(e, execution);
@@ -182,20 +206,28 @@ where
 
     // Agent interrupts -> shim receives Interrupt.
     client
-        .interrupt(v1::InterruptRequest { execution: exec_str.clone() })
+        .interrupt(v1::InterruptRequest {
+            execution: exec_str.clone(),
+        })
         .await
         .unwrap();
-    let got = tokio::time::timeout(Duration::from_secs(5), read_msg::<_, DaemonToShim>(&mut shim))
-        .await
-        .expect("timed out waiting for interrupt")
-        .unwrap()
-        .unwrap();
+    let got = tokio::time::timeout(
+        Duration::from_secs(5),
+        read_msg::<_, DaemonToShim>(&mut shim),
+    )
+    .await
+    .expect("timed out waiting for interrupt")
+    .unwrap()
+    .unwrap();
     assert!(matches!(got, DaemonToShim::Interrupt { .. }));
 
     // Shim reports completion -> the live stream ends with that status.
     write_msg(
         &mut shim,
-        &ShimToDaemon::Status { execution, status: ExecutionStatus::Completed { code: 0 } },
+        &ShimToDaemon::Status {
+            execution,
+            status: ExecutionStatus::Completed { code: 0 },
+        },
     )
     .await
     .unwrap();
@@ -213,7 +245,10 @@ where
     })
     .await
     .expect("timed out waiting for terminal status");
-    assert_eq!(final_status.unwrap().kind, v1::status::Kind::Completed as i32);
+    assert_eq!(
+        final_status.unwrap().kind,
+        v1::status::Kind::Completed as i32
+    );
 }
 
 async fn connect_client(url: &str) -> TerminalClient<tonic::transport::Channel> {

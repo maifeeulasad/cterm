@@ -17,9 +17,11 @@ async fn drain(mut rx: OutputReceiver) -> Vec<u8> {
 
 #[tokio::test]
 async fn runs_command_captures_output_and_exit_code() {
-    let (session, rx) =
-        PtySession::spawn(Spawn::command("/bin/bash", &["-c", "printf OUT_MARKER; exit 7"]))
-            .expect("spawn");
+    let (session, rx) = PtySession::spawn(Spawn::command(
+        "/bin/bash",
+        &["-c", "printf OUT_MARKER; exit 7"],
+    ))
+    .expect("spawn");
 
     let out = drain(rx).await;
     let status = session.wait().await.expect("wait");
@@ -43,7 +45,10 @@ async fn interactive_input_is_delivered_and_evaluated() {
         .write_input(b"echo val-$((6*7))\n".to_vec())
         .await
         .expect("write echo");
-    session.write_input(b"exit\n".to_vec()).await.expect("write exit");
+    session
+        .write_input(b"exit\n".to_vec())
+        .await
+        .expect("write exit");
 
     let out = drain(rx).await;
     let status = session.wait().await.expect("wait");

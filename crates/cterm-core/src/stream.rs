@@ -65,7 +65,12 @@ mod tests {
 
     #[test]
     fn roundtrips_through_json_with_non_utf8_bytes() {
-        let chunk = StreamChunk::now(ExecutionId::new(), StreamKind::Stdout, 0, vec![0xff, 0x00, 0x41]);
+        let chunk = StreamChunk::now(
+            ExecutionId::new(),
+            StreamKind::Stdout,
+            0,
+            vec![0xff, 0x00, 0x41],
+        );
         let json = serde_json::to_string(&chunk).unwrap();
         let back: StreamChunk = serde_json::from_str(&json).unwrap();
         assert_eq!(chunk, back);

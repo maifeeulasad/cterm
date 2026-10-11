@@ -38,11 +38,21 @@ async fn api_lists_sessions_executions_and_transcript() {
     rec.transition(ExecutionStatus::Completed { code: 0 });
     store.put_execution(&rec).await.unwrap();
     store
-        .append_chunk(&StreamChunk::now(rec.id, StreamKind::Stdin, 0, b"echo hi\n".to_vec()))
+        .append_chunk(&StreamChunk::now(
+            rec.id,
+            StreamKind::Stdin,
+            0,
+            b"echo hi\n".to_vec(),
+        ))
         .await
         .unwrap();
     store
-        .append_chunk(&StreamChunk::now(rec.id, StreamKind::Stdout, 1, b"hello-web\n".to_vec()))
+        .append_chunk(&StreamChunk::now(
+            rec.id,
+            StreamKind::Stdout,
+            1,
+            b"hello-web\n".to_vec(),
+        ))
         .await
         .unwrap();
 
@@ -71,7 +81,11 @@ async fn api_lists_sessions_executions_and_transcript() {
     assert_eq!(body["record"]["status"]["kind"], "completed");
 
     // Unknown execution -> 404.
-    let (code, _) = get_json(&app, "/api/executions/exe-00000000-0000-0000-0000-000000000000/transcript").await;
+    let (code, _) = get_json(
+        &app,
+        "/api/executions/exe-00000000-0000-0000-0000-000000000000/transcript",
+    )
+    .await;
     assert_eq!(code, 404);
 
     // Bad id -> 400.

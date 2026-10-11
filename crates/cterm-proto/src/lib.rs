@@ -9,6 +9,7 @@
 
 /// Generated types for the `cterm.v1` package.
 pub mod v1 {
+    #![allow(clippy::all, clippy::pedantic)] // generated protobuf code
     tonic::include_proto!("cterm.v1");
 }
 

@@ -122,7 +122,10 @@ mod platform {
         let daemon = stage_daemon(layout, daemon_src)?;
         fs::create_dir_all(unit_dir)?;
         let unit_path = unit_dir.join(UNIT_NAME);
-        fs::write(&unit_path, unit_contents(&daemon, &layout.default_db(), addr))?;
+        fs::write(
+            &unit_path,
+            unit_contents(&daemon, &layout.default_db(), addr),
+        )?;
         Ok(unit_path)
     }
 
@@ -194,7 +197,11 @@ mod platform {
         let mut lines = vec![format!(
             "unit: {} ({})",
             unit_path.display(),
-            if unit_path.exists() { "present" } else { "absent" }
+            if unit_path.exists() {
+                "present"
+            } else {
+                "absent"
+            }
         )];
         for q in ["is-enabled", "is-active"] {
             match systemctl(&[q, UNIT_NAME]) {
@@ -234,7 +241,9 @@ mod platform {
             let unit_path = install_unit(&layout, &unit_dir, &fake, DEFAULT_ADDR).unwrap();
             assert!(unit_path.exists());
             assert!(layout.bin_dir().join("cterm-daemon").exists());
-            assert!(fs::read_to_string(&unit_path).unwrap().contains("cterm-daemon"));
+            assert!(fs::read_to_string(&unit_path)
+                .unwrap()
+                .contains("cterm-daemon"));
 
             assert!(remove_unit(&unit_dir).unwrap());
             assert!(!unit_path.exists());
@@ -253,8 +262,8 @@ mod platform {
     pub const LAUNCHER_CMD: &str = "cterm-daemon-start.cmd";
 
     pub fn default_startup_dir() -> CliResult<PathBuf> {
-        let appdata =
-            std::env::var_os("APPDATA").ok_or_else(|| CliError::Msg("APPDATA is not set".to_owned()))?;
+        let appdata = std::env::var_os("APPDATA")
+            .ok_or_else(|| CliError::Msg("APPDATA is not set".to_owned()))?;
         Ok(Path::new(&appdata)
             .join("Microsoft")
             .join("Windows")
@@ -289,7 +298,10 @@ mod platform {
     ) -> CliResult<PathBuf> {
         let daemon = stage_daemon(layout, daemon_src)?;
         let launcher = layout.bin_dir().join(LAUNCHER_CMD);
-        fs::write(&launcher, launcher_contents(&daemon, &layout.default_db(), addr))?;
+        fs::write(
+            &launcher,
+            launcher_contents(&daemon, &layout.default_db(), addr),
+        )?;
         fs::create_dir_all(startup_dir)?;
         let vbs = startup_dir.join(STARTUP_VBS);
         fs::write(&vbs, startup_contents(&launcher))?;

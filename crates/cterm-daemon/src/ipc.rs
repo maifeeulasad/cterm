@@ -145,7 +145,10 @@ impl<S: RecordStore + Send + Sync + 'static> Daemon<S> {
                 break; // clean EOF
             };
             match msg {
-                ShimToDaemon::Hello { version: _, session } => {
+                ShimToDaemon::Hello {
+                    version: _,
+                    session,
+                } => {
                     eprintln!(
                         "cterm-daemon: shim connected (session {}, {})",
                         session.id, session.shell

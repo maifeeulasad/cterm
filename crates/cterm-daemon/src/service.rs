@@ -12,7 +12,8 @@ use tonic::{Request, Response, Status};
 use crate::daemon::Daemon;
 
 /// A server-streamed sequence of execution events.
-type EventStream = Pin<Box<dyn Stream<Item = std::result::Result<v1::ExecutionEvent, Status>> + Send>>;
+type EventStream =
+    Pin<Box<dyn Stream<Item = std::result::Result<v1::ExecutionEvent, Status>> + Send>>;
 
 /// gRPC front end for the daemon.
 pub struct TerminalService<S: RecordStore> {
@@ -75,7 +76,11 @@ impl<S: RecordStore + Send + Sync + 'static> v1::terminal_server::Terminal for T
         &self,
         request: Request<v1::RunRequest>,
     ) -> std::result::Result<Response<Self::RunStream>, Status> {
-        let started = self.daemon.run(request.into_inner()).await.map_err(to_status)?;
+        let started = self
+            .daemon
+            .run(request.into_inner())
+            .await
+            .map_err(to_status)?;
         Ok(Response::new(live_stream(started.events)))
     }
 

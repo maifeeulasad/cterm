@@ -36,7 +36,8 @@ fn wrapper_runs_real_cmd_transparently_and_records() {
     fs::copy(env!("CARGO_BIN_EXE_cterm"), &shim).unwrap();
 
     // Config points the wrapped `cmd` at the real cmd.exe (from ComSpec).
-    let real_cmd = std::env::var("ComSpec").unwrap_or_else(|_| "C:\\Windows\\System32\\cmd.exe".to_owned());
+    let real_cmd =
+        std::env::var("ComSpec").unwrap_or_else(|_| "C:\\Windows\\System32\\cmd.exe".to_owned());
     let cfg = serde_json::json!({
         "db": db.to_string_lossy(),
         "shells": { "cmd": real_cmd },

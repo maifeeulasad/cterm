@@ -210,9 +210,7 @@ impl RecordStore for SqliteStore {
         let key = session.to_string();
         self.with_conn(move |c| {
             let mut stmt = c
-                .prepare(
-                    "SELECT json FROM executions WHERE session = ?1 ORDER BY started_at ASC",
-                )
+                .prepare("SELECT json FROM executions WHERE session = ?1 ORDER BY started_at ASC")
                 .map_err(sql_err)?;
             let rows = stmt
                 .query_map(params![key], |r| r.get::<_, String>(0))

@@ -13,7 +13,7 @@ const PAD: u8 = b'=';
 /// Encodes bytes to a standard, padded base64 string.
 #[must_use]
 pub fn encode(input: &[u8]) -> String {
-    let mut out = String::with_capacity((input.len() + 2) / 3 * 4);
+    let mut out = String::with_capacity(input.len().div_ceil(3) * 4);
     for chunk in input.chunks(3) {
         let b0 = chunk[0] as u32;
         let b1 = *chunk.get(1).unwrap_or(&0) as u32;

@@ -27,7 +27,6 @@ use serde::Serialize;
 type Store = Arc<dyn RecordStore>;
 
 /// Builds the web application router backed by `store`.
-#[must_use]
 pub fn router(store: Store) -> Router {
     Router::new()
         .route("/", get(index))
@@ -93,7 +92,12 @@ async fn get_execution(
         .get_execution(execution)
         .await?
         .map(Json)
-        .ok_or_else(|| ApiError(StatusCode::NOT_FOUND, format!("unknown execution {execution}")))
+        .ok_or_else(|| {
+            ApiError(
+                StatusCode::NOT_FOUND,
+                format!("unknown execution {execution}"),
+            )
+        })
 }
 
 /// A record plus its reconstructed text transcript.
@@ -109,10 +113,12 @@ async fn transcript(
     Path(id): Path<String>,
 ) -> Result<Json<TranscriptResponse>, ApiError> {
     let execution = parse_execution(&id)?;
-    let record = store
-        .get_execution(execution)
-        .await?
-        .ok_or_else(|| ApiError(StatusCode::NOT_FOUND, format!("unknown execution {execution}")))?;
+    let record = store.get_execution(execution).await?.ok_or_else(|| {
+        ApiError(
+            StatusCode::NOT_FOUND,
+            format!("unknown execution {execution}"),
+        )
+    })?;
     // load_chunks returns seq order, which interleaves stdin and stdout as they
     // actually occurred.
     let chunks = store.load_chunks(execution).await?;
