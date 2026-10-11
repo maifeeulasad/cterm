@@ -59,7 +59,7 @@ fn try_record(name: &str, args: &[String]) -> CliResult<i32> {
 /// Records the session live to the daemon over IPC if it is reachable;
 /// otherwise records straight to the local SQLite database.
 async fn record_session(db: &str, name: &str, real: &str, args: &[String]) -> CliResult<i32> {
-    #[cfg(unix)]
+    #[cfg(any(unix, windows))]
     {
         if let Some(code) = try_ipc_session(name, real, args).await? {
             return Ok(code);
@@ -68,24 +68,47 @@ async fn record_session(db: &str, name: &str, real: &str, args: &[String]) -> Cl
     record_session_db(db, name, real, args).await
 }
 
-/// Runs the session under a PTY, forwarding everything live to the daemon over
-/// the IPC socket and applying control (input/interrupt/resize) it sends back.
-/// Returns `Ok(None)` if the daemon socket is not reachable (caller falls back
-/// to local recording).
+/// Connects to the daemon IPC endpoint if reachable.
 #[cfg(unix)]
+async fn connect_endpoint(endpoint: &str) -> Option<tokio::net::UnixStream> {
+    tokio::net::UnixStream::connect(endpoint).await.ok()
+}
+
+#[cfg(windows)]
+async fn connect_endpoint(
+    endpoint: &str,
+) -> Option<tokio::net::windows::named_pipe::NamedPipeClient> {
+    tokio::net::windows::named_pipe::ClientOptions::new()
+        .open(endpoint)
+        .ok()
+}
+
+/// Streams the session live to the daemon if its endpoint is reachable;
+/// returns `Ok(None)` otherwise (the caller falls back to local recording).
+#[cfg(any(unix, windows))]
 async fn try_ipc_session(name: &str, real: &str, args: &[String]) -> CliResult<Option<i32>> {
+    let Some(endpoint) = cterm_ipc::default_endpoint() else {
+        return Ok(None);
+    };
+    let Some(stream) = connect_endpoint(&endpoint).await else {
+        return Ok(None); // daemon not running -> fall back to DB
+    };
+    run_ipc_session(stream, name, real, args).await.map(Some)
+}
+
+/// Runs the session under a PTY, forwarding everything live to the daemon and
+/// applying the control (input/interrupt/resize) it sends back. Generic over
+/// the transport: a Unix socket or a Windows named pipe.
+#[cfg(any(unix, windows))]
+async fn run_ipc_session<T>(stream: T, name: &str, real: &str, args: &[String]) -> CliResult<i32>
+where
+    T: tokio::io::AsyncRead + tokio::io::AsyncWrite + Send + 'static,
+{
     use cterm_ipc::{read_msg, write_msg, DaemonToShim, ShimToDaemon, PROTOCOL_VERSION};
     use cterm_storage::NullStore;
     use tokio::io::AsyncWriteExt;
 
-    let Some(sock) = cterm_ipc::default_socket_path() else {
-        return Ok(None);
-    };
-    let stream = match tokio::net::UnixStream::connect(&sock).await {
-        Ok(s) => s,
-        Err(_) => return Ok(None), // daemon not running -> fall back to DB
-    };
-    let (mut read_half, mut write_half) = stream.into_split();
+    let (mut read_half, mut write_half) = tokio::io::split(stream);
 
     // The daemon persists; the shim keeps no local copy.
     let store = std::sync::Arc::new(NullStore::new());
@@ -171,16 +194,24 @@ async fn try_ipc_session(name: &str, real: &str, args: &[String]) -> CliResult<O
         }
     });
 
-    // SIGWINCH -> resize the PTY.
+    // SIGWINCH -> resize the PTY (Unix; Windows resize handled later).
     let resize_ctrl = run.control();
     let winch_task = tokio::spawn(async move {
-        if let Ok(mut winch) =
-            tokio::signal::unix::signal(tokio::signal::unix::SignalKind::window_change())
+        #[cfg(unix)]
         {
-            while winch.recv().await.is_some() {
-                let (cols, rows) = current_size();
-                let _ = resize_ctrl.resize(rows, cols);
+            if let Ok(mut winch) =
+                tokio::signal::unix::signal(tokio::signal::unix::SignalKind::window_change())
+            {
+                while winch.recv().await.is_some() {
+                    let (cols, rows) = current_size();
+                    let _ = resize_ctrl.resize(rows, cols);
+                }
             }
+        }
+        #[cfg(not(unix))]
+        {
+            let _ = &resize_ctrl;
+            std::future::pending::<()>().await;
         }
     });
 
@@ -219,7 +250,7 @@ async fn try_ipc_session(name: &str, real: &str, args: &[String]) -> CliResult<O
     drop(tx);
     let _ = writer.await;
 
-    Ok(Some(exit_code(status)))
+    Ok(exit_code(status))
 }
 
 async fn record_session_db(db: &str, name: &str, real: &str, args: &[String]) -> CliResult<i32> {

@@ -7,6 +7,7 @@
 //! observes and drives that shell over gRPC, never opening its own connection.
 
 use std::collections::HashMap;
+#[cfg(unix)]
 use std::path::Path;
 use std::sync::Arc;
 
@@ -16,7 +17,7 @@ use cterm_core::{
     SessionId, SessionStatus,
 };
 use cterm_ipc::{read_msg, write_msg, DaemonToShim, ShimToDaemon};
-use tokio::net::{UnixListener, UnixStream};
+use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::sync::{broadcast, mpsc};
 
 use crate::daemon::Daemon;
@@ -58,15 +59,21 @@ impl ExecutionHandle for RemoteControl {
 }
 
 impl<S: RecordStore + Send + Sync + 'static> Daemon<S> {
-    /// Serves the IPC socket at `path`, accepting shim connections forever.
-    /// Replaces any stale socket file at that path.
-    pub async fn serve_ipc(&self, path: &Path) -> Result<()> {
+    /// Serves the IPC endpoint, accepting shim connections forever.
+    ///
+    /// `endpoint` is a platform-native address (see
+    /// [`cterm_ipc::default_endpoint`]): a Unix socket path, or a Windows named
+    /// pipe like `\\.\pipe\cterm-daemon`.
+    #[cfg(unix)]
+    pub async fn serve_ipc(&self, endpoint: &str) -> Result<()> {
+        use tokio::net::UnixListener;
+        let path = Path::new(endpoint);
         if let Some(parent) = path.parent() {
             let _ = std::fs::create_dir_all(parent);
         }
         let _ = std::fs::remove_file(path);
         let listener = UnixListener::bind(path)
-            .map_err(|e| Error::Transport(format!("bind {}: {e}", path.display())))?;
+            .map_err(|e| Error::Transport(format!("bind {endpoint}: {e}")))?;
         loop {
             match listener.accept().await {
                 Ok((stream, _)) => {
@@ -80,9 +87,39 @@ impl<S: RecordStore + Send + Sync + 'static> Daemon<S> {
         }
     }
 
-    /// Handles one shim connection to completion.
-    async fn handle_connection(&self, stream: UnixStream) -> Result<()> {
-        let (mut reader, write_half) = stream.into_split();
+    /// Serves the IPC endpoint over a Windows named pipe.
+    #[cfg(windows)]
+    pub async fn serve_ipc(&self, endpoint: &str) -> Result<()> {
+        use tokio::net::windows::named_pipe::ServerOptions;
+        // One instance waits for a client; on connect we hand it off and create
+        // the next instance for the following client.
+        let mut server = ServerOptions::new()
+            .first_pipe_instance(true)
+            .create(endpoint)
+            .map_err(|e| Error::Transport(format!("create pipe {endpoint}: {e}")))?;
+        loop {
+            server
+                .connect()
+                .await
+                .map_err(|e| Error::Transport(format!("pipe connect: {e}")))?;
+            let connected = server;
+            server = ServerOptions::new()
+                .create(endpoint)
+                .map_err(|e| Error::Transport(format!("create pipe {endpoint}: {e}")))?;
+            let daemon = self.clone();
+            tokio::spawn(async move {
+                let _ = daemon.handle_connection(connected).await;
+            });
+        }
+    }
+
+    /// Handles one shim connection to completion. Generic over the transport so
+    /// Unix sockets and Windows named pipes share the same logic.
+    async fn handle_connection<T>(&self, stream: T) -> Result<()>
+    where
+        T: AsyncRead + AsyncWrite + Send + 'static,
+    {
+        let (mut reader, write_half) = tokio::io::split(stream);
 
         // Writer task: drains control messages to the shim.
         let (to_shim_tx, mut to_shim_rx) = mpsc::unbounded_channel::<DaemonToShim>();

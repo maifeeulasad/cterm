@@ -10,7 +10,6 @@
 
 pub mod daemon;
 pub mod handle;
-#[cfg(unix)]
 pub mod ipc;
 pub mod service;
 

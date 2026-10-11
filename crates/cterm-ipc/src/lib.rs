@@ -15,6 +15,7 @@
 #![warn(missing_docs)]
 
 use std::io;
+#[cfg(not(windows))]
 use std::path::PathBuf;
 
 use cterm_core::{ExecutionId, ExecutionRecord, ExecutionStatus, SessionId, SessionStatus, StreamChunk};
@@ -135,19 +136,33 @@ where
     Ok(Some(msg))
 }
 
-/// The default IPC socket path: `$CTERM_SOCK`, else `<home>/.cterm/run/daemon.sock`.
+/// The default IPC endpoint, as a platform-native address string.
+///
+/// `$CTERM_SOCK` overrides it on either platform. Otherwise: on Unix a socket
+/// path `<home>/.cterm/run/daemon.sock`; on Windows a named pipe
+/// `\\.\pipe\cterm-daemon`. The daemon binds/creates this and the shim connects
+/// to it.
 #[must_use]
-pub fn default_socket_path() -> Option<PathBuf> {
+pub fn default_endpoint() -> Option<String> {
     if let Some(explicit) = std::env::var_os("CTERM_SOCK") {
-        return Some(PathBuf::from(explicit));
+        return Some(explicit.to_string_lossy().into_owned());
     }
-    let home = std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE"))?;
-    Some(
-        PathBuf::from(home)
-            .join(".cterm")
-            .join("run")
-            .join("daemon.sock"),
-    )
+    #[cfg(windows)]
+    {
+        Some(r"\\.\pipe\cterm-daemon".to_owned())
+    }
+    #[cfg(not(windows))]
+    {
+        let home = std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE"))?;
+        Some(
+            PathBuf::from(home)
+                .join(".cterm")
+                .join("run")
+                .join("daemon.sock")
+                .to_string_lossy()
+                .into_owned(),
+        )
+    }
 }
 
 #[cfg(test)]

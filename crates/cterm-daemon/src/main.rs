@@ -21,18 +21,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let store = Arc::new(SqliteStore::open(&db)?);
     let daemon = Daemon::new(store);
 
-    // Live shim IPC over a Unix socket (Unix only).
-    #[cfg(unix)]
-    {
-        if let Some(sock) = cterm_ipc::default_socket_path() {
-            let ipc_daemon = daemon.clone();
-            eprintln!("cterm-daemon ipc socket: {}", sock.display());
-            tokio::spawn(async move {
-                if let Err(e) = ipc_daemon.serve_ipc(&sock).await {
-                    eprintln!("cterm-daemon ipc error: {e}");
-                }
-            });
-        }
+    // Live shim IPC: Unix socket on Unix, named pipe on Windows.
+    if let Some(endpoint) = cterm_ipc::default_endpoint() {
+        let ipc_daemon = daemon.clone();
+        eprintln!("cterm-daemon ipc endpoint: {endpoint}");
+        tokio::spawn(async move {
+            if let Err(e) = ipc_daemon.serve_ipc(&endpoint).await {
+                eprintln!("cterm-daemon ipc error: {e}");
+            }
+        });
     }
 
     eprintln!("cterm-daemon listening on {addr} (db: {db})");
