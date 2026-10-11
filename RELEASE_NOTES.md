@@ -1,10 +1,17 @@
-# cterm v0.2.2
+# cterm v0.2.3
 
 A terminal integration / shim tool that lets agents observe, record, stream, and
 drive shell command executions **without ever holding the credentials used to
 open the session**.
 
 > Early release. Tri-platform; shared for feedback. Expect rough edges.
+
+## 0.2.3 — stable download URLs + README download badges
+
+- Release assets now have **version-less names** (e.g. `cterm-x86_64-linux.tar.gz`),
+  so `…/releases/latest/download/<name>` always points to the newest build.
+- README gained per-platform **download badges** (Windows / Linux / macOS
+  Apple Silicon / macOS Intel) and a downloads-count badge.
 
 ## 0.2.2 — docs & help for agents
 
@@ -75,11 +82,13 @@ that coverage milestone (adding macOS was a big expansion).
 
 Binaries: `cterm` (CLI + shim), `cterm-daemon`, `cterm-web`.
 
+Asset names are version-less, so these `latest/download` URLs always fetch the
+newest release.
+
 ### Linux (x86_64)
 
 ```bash
-VER=v0.2.2
-curl -fsSL "https://github.com/maifeeulasad/cterm/releases/download/$VER/cterm-$VER-x86_64-linux.tar.gz" | tar -xz
+curl -fsSL "https://github.com/maifeeulasad/cterm/releases/latest/download/cterm-x86_64-linux.tar.gz" | tar -xz
 sudo install -m 0755 cterm cterm-daemon cterm-web /usr/local/bin/
 cterm --help
 ```
@@ -87,9 +96,8 @@ cterm --help
 ### macOS (Apple Silicon or Intel)
 
 ```bash
-VER=v0.2.2
 ARCH=$([ "$(uname -m)" = "arm64" ] && echo aarch64 || echo x86_64)
-curl -fsSL "https://github.com/maifeeulasad/cterm/releases/download/$VER/cterm-$VER-$ARCH-macos.tar.gz" | tar -xz
+curl -fsSL "https://github.com/maifeeulasad/cterm/releases/latest/download/cterm-$ARCH-macos.tar.gz" | tar -xz
 # Gatekeeper quarantines downloaded binaries; clear it, then install:
 xattr -dr com.apple.quarantine cterm cterm-daemon cterm-web 2>/dev/null || true
 sudo install -m 0755 cterm cterm-daemon cterm-web /usr/local/bin/
@@ -99,8 +107,7 @@ cterm --help
 ### Windows (x86_64, PowerShell)
 
 ```powershell
-$ver = "v0.2.2"
-Invoke-WebRequest "https://github.com/maifeeulasad/cterm/releases/download/$ver/cterm-$ver-x86_64-windows.zip" -OutFile cterm.zip
+Invoke-WebRequest "https://github.com/maifeeulasad/cterm/releases/latest/download/cterm-x86_64-windows.zip" -OutFile cterm.zip
 Expand-Archive cterm.zip -DestinationPath "$env:LOCALAPPDATA\cterm" -Force
 # Add "$env:LOCALAPPDATA\cterm" to your PATH, then:
 cterm.exe --help
@@ -115,7 +122,7 @@ GitHub Actions). Verify that an archive was built by this repo's release
 workflow:
 
 ```bash
-gh attestation verify cterm-v0.2.2-x86_64-linux.tar.gz --repo maifeeulasad/cterm
+gh attestation verify cterm-x86_64-linux.tar.gz --repo maifeeulasad/cterm
 ```
 
 ## Known limitations

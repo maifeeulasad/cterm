@@ -20,16 +20,16 @@ jobs:
         include:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
-            archive: cterm-${{ github.ref_name }}-x86_64-linux.tar.gz
+            archive: cterm-x86_64-linux.tar.gz
           - os: windows-latest
             target: x86_64-pc-windows-msvc
-            archive: cterm-${{ github.ref_name }}-x86_64-windows.zip
+            archive: cterm-x86_64-windows.zip
           - os: macos-latest
             target: aarch64-apple-darwin
-            archive: cterm-${{ github.ref_name }}-aarch64-macos.tar.gz
+            archive: cterm-aarch64-macos.tar.gz
           - os: macos-latest
             target: x86_64-apple-darwin
-            archive: cterm-${{ github.ref_name }}-x86_64-macos.tar.gz
+            archive: cterm-x86_64-macos.tar.gz
     steps:
       - uses: actions/checkout@v7
 
