@@ -1,9 +1,19 @@
 # cterm
 
+[![CI](https://github.com/maifeeulasad/cterm/actions/workflows/ci.yml/badge.svg)](https://github.com/maifeeulasad/cterm/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/maifeeulasad/cterm/actions/workflows/codeql.yml/badge.svg)](https://github.com/maifeeulasad/cterm/actions/workflows/codeql.yml)
+[![Security audit](https://github.com/maifeeulasad/cterm/actions/workflows/audit.yml/badge.svg)](https://github.com/maifeeulasad/cterm/actions/workflows/audit.yml)
+[![Release](https://img.shields.io/github/v/release/maifeeulasad/cterm?sort=semver)](https://github.com/maifeeulasad/cterm/releases/latest)
+[![License](https://img.shields.io/github/license/maifeeulasad/cterm)](LICENSE)
+
 A terminal integration / shim tool. `cterm` sits between a process and its
 shell so that command executions can be **streamed, tracked, recorded, and
 driven by agents** — without an agent ever needing to hold the credentials used
 to open the session.
+
+> **Downloads:** prebuilt Linux and Windows binaries (with signed build
+> provenance) are on the [releases page](https://github.com/maifeeulasad/cterm/releases/latest).
+> See the release notes for install commands.
 
 ## Why
 
