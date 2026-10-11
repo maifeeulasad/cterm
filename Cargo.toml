@@ -47,7 +47,7 @@ tonic-build = "0.11.0"
 futures-core = "0.3.30"
 tokio-stream = "0.1.14"
 async-stream = "0.3.5"
-axum = "0.6.20"
+axum = "0.8.9"
 tower = "0.4.13"
 hyper = "0.14.28"
 
