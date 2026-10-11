@@ -22,8 +22,9 @@ though, can. `cterm` turns that into a *hybrid* workflow:
 
 Working end to end on **Linux and Windows** (macOS next). The daemon, gRPC API,
 SQLite store, shell shim/wrapper, webview, and daemon autostart all build and are
-tested on both. Live shim→daemon IPC (for driving an interactive wrapped shell
-from an agent in real time) is the main remaining piece.
+tested on both. Live **shim→daemon IPC** (Linux) is wired: a human opens an
+interactive shell through the wrapper, and an agent observes and drives it in
+real time over gRPC — never opening its own connection.
 
 ## Architecture
 
