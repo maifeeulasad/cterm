@@ -19,6 +19,9 @@ jobs:
     if: ${{ github.actor != 'dependabot[bot]' }}
     name: build & test (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    # Safety net: a hung test can't burn the runner (and concurrency below
+    # cancels superseded runs).
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:

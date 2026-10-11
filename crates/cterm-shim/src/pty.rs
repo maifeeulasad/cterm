@@ -110,12 +110,15 @@ impl PtySession {
             .map_err(|e| Error::Other(format!("take writer failed: {e}")))?;
 
         let (tx, rx) = mpsc::unbounded_channel();
-        spawn_read_loop(reader, tx);
+        let writer = Arc::new(Mutex::new(writer));
+        // The read loop shares the writer so it can answer ConPTY's startup
+        // cursor-position query (see `spawn_read_loop`).
+        spawn_read_loop(reader, tx, writer.clone());
 
         Ok((
             Self {
                 master: Arc::new(Mutex::new(pair.master)),
-                writer: Arc::new(Mutex::new(writer)),
+                writer,
                 child: Arc::new(Mutex::new(Some(child))),
                 pid,
                 interrupted: Arc::new(AtomicBool::new(false)),
@@ -260,13 +263,34 @@ enum Interrupt {
 }
 
 /// Moves the blocking reader onto its own thread, forwarding chunks until EOF.
-fn spawn_read_loop(mut reader: Box<dyn Read + Send>, tx: mpsc::UnboundedSender<Vec<u8>>) {
+///
+/// On Windows it also answers ConPTY's startup cursor-position query. Since
+/// portable-pty 0.9 creates the pseudo-console with `PSEUDOCONSOLE_INHERIT_CURSOR`,
+/// ConPTY emits a Device Status Report request (`ESC[6n`) and blocks the child
+/// until the terminal replies with its cursor position. We are that terminal but
+/// not a full emulator, so we reply with a fixed position (`ESC[1;1R`); without
+/// this the child never starts and `wait()` hangs forever.
+fn spawn_read_loop(
+    mut reader: Box<dyn Read + Send>,
+    tx: mpsc::UnboundedSender<Vec<u8>>,
+    writer: Arc<Mutex<Box<dyn Write + Send>>>,
+) {
+    #[cfg(not(windows))]
+    let _ = &writer; // the cursor-report reply below is Windows-only
     std::thread::spawn(move || {
         let mut buf = [0u8; 8192];
         loop {
             match reader.read(&mut buf) {
                 Ok(0) => break, // EOF: child gone, terminal released.
                 Ok(n) => {
+                    #[cfg(windows)]
+                    {
+                        if buf[..n].windows(4).any(|w| w == b"\x1b[6n") {
+                            if let Ok(mut w) = writer.lock() {
+                                let _ = w.write_all(b"\x1b[1;1R").and_then(|()| w.flush());
+                            }
+                        }
+                    }
                     if tx.send(buf[..n].to_vec()).is_err() {
                         break; // Receiver dropped; stop reading.
                     }
