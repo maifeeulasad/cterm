@@ -14,7 +14,7 @@ portable-pty.workspace = true
 tokio = { workspace = true, features = ["rt", "rt-multi-thread", "sync", "time", "macros"] }
 
 [target.'cfg(unix)'.dependencies]
-nix = { version = "0.27.1", features = ["signal"] }
+nix = { version = "0.31.3", features = ["signal"] }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "time"] }

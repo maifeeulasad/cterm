@@ -23,7 +23,7 @@ thiserror.workspace = true
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "sync", "signal", "net", "io-std", "io-util", "time"] }
 
 [target.'cfg(unix)'.dependencies]
-nix = { version = "0.27.1", features = ["term", "signal"] }
+nix = { version = "0.31.3", features = ["term", "signal"] }
 terminal_size = "0.3.0"
 
 [target.'cfg(windows)'.dependencies]
