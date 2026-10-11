@@ -27,6 +27,3 @@ jobs:
         uses: rustsec/audit-check@v2
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          # RUSTSEC-2017-0008: `serial` is unmaintained; it is a transitive dep
-          # of portable-pty (serial-port terminals we do not use), not a vuln.
-          ignore: RUSTSEC-2017-0008
