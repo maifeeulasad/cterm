@@ -392,14 +392,187 @@ mod platform {
     }
 }
 
+// ========================= macOS: launchd LaunchAgent =========================
+#[cfg(target_os = "macos")]
+mod platform {
+    use super::*;
+    use std::process::Command;
+
+    pub const LABEL: &str = "com.maifeeulasad.cterm-daemon";
+
+    pub fn default_agent_dir() -> CliResult<PathBuf> {
+        let home =
+            std::env::var_os("HOME").ok_or_else(|| CliError::Msg("HOME is not set".to_owned()))?;
+        Ok(Path::new(&home).join("Library").join("LaunchAgents"))
+    }
+
+    pub fn plist_contents(daemon: &Path, db: &Path, addr: &str) -> String {
+        format!(
+            r#"<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>{label}</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>{daemon}</string>
+    </array>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>CTERM_DB</key>
+        <string>{db}</string>
+        <key>CTERM_ADDR</key>
+        <string>{addr}</string>
+    </dict>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <false/>
+</dict>
+</plist>
+"#,
+            label = LABEL,
+            daemon = daemon.display(),
+            db = db.display(),
+            addr = addr,
+        )
+    }
+
+    pub fn install_agent(
+        layout: &Layout,
+        agent_dir: &Path,
+        daemon_src: &Path,
+        addr: &str,
+    ) -> CliResult<PathBuf> {
+        let daemon = stage_daemon(layout, daemon_src)?;
+        fs::create_dir_all(agent_dir)?;
+        let plist = agent_dir.join(format!("{LABEL}.plist"));
+        fs::write(&plist, plist_contents(&daemon, &layout.default_db(), addr))?;
+        Ok(plist)
+    }
+
+    pub fn remove_agent(agent_dir: &Path) -> CliResult<bool> {
+        let plist = agent_dir.join(format!("{LABEL}.plist"));
+        if plist.exists() {
+            fs::remove_file(&plist)?;
+            Ok(true)
+        } else {
+            Ok(false)
+        }
+    }
+
+    fn launchctl(args: &[&str]) -> CliResult<String> {
+        let out = Command::new("launchctl")
+            .args(args)
+            .output()
+            .map_err(|e| CliError::Msg(format!("launchctl not available: {e}")))?;
+        let mut text = String::from_utf8_lossy(&out.stdout).into_owned();
+        text.push_str(&String::from_utf8_lossy(&out.stderr));
+        if out.status.success() {
+            Ok(text)
+        } else {
+            Err(CliError::Msg(format!(
+                "launchctl {} failed: {}",
+                args.join(" "),
+                text.trim()
+            )))
+        }
+    }
+
+    pub fn enable(layout: &Layout) -> CliResult<Vec<String>> {
+        let daemon = locate_daemon(layout)?;
+        let agent_dir = default_agent_dir()?;
+        let plist = install_agent(layout, &agent_dir, &daemon, DEFAULT_ADDR)?;
+        let mut lines = vec![format!("Wrote LaunchAgent {}", plist.display())];
+        match launchctl(&["load", "-w", &plist.to_string_lossy()]) {
+            Ok(_) => lines.push(format!("Loaded {LABEL} (starts at login).")),
+            Err(e) => {
+                lines.push(format!("Agent written, but load failed: {e}"));
+                lines.push(format!(
+                    "Load it manually: launchctl load -w {}",
+                    plist.display()
+                ));
+            }
+        }
+        Ok(lines)
+    }
+
+    pub fn disable(layout: &Layout) -> CliResult<Vec<String>> {
+        let _ = layout;
+        let agent_dir = default_agent_dir()?;
+        let plist = agent_dir.join(format!("{LABEL}.plist"));
+        let _ = launchctl(&["unload", "-w", &plist.to_string_lossy()]);
+        if remove_agent(&agent_dir)? {
+            Ok(vec![format!("Unloaded and removed {LABEL}.")])
+        } else {
+            Ok(vec!["No LaunchAgent to remove.".into()])
+        }
+    }
+
+    pub fn status(layout: &Layout) -> CliResult<Vec<String>> {
+        let _ = layout;
+        let agent_dir = default_agent_dir()?;
+        let plist = agent_dir.join(format!("{LABEL}.plist"));
+        let mut lines = vec![format!(
+            "agent: {} ({})",
+            plist.display(),
+            if plist.exists() { "present" } else { "absent" }
+        )];
+        match launchctl(&["list", LABEL]) {
+            Ok(_) => lines.push("loaded: yes".into()),
+            Err(_) => lines.push("loaded: no".into()),
+        }
+        Ok(lines)
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        fn plist_has_label_and_env() {
+            let p = plist_contents(
+                Path::new("/Users/u/.cterm/bin/cterm-daemon"),
+                Path::new("/Users/u/.cterm/cterm.db"),
+                "127.0.0.1:50051",
+            );
+            assert!(p.contains("<string>com.maifeeulasad.cterm-daemon</string>"));
+            assert!(p.contains("<string>/Users/u/.cterm/bin/cterm-daemon</string>"));
+            assert!(p.contains("CTERM_DB"));
+            assert!(p.contains("/Users/u/.cterm/cterm.db"));
+            assert!(p.contains("RunAtLoad"));
+        }
+
+        #[test]
+        fn install_and_remove_agent() {
+            let base = crate::service::tests_support::temp_base();
+            let layout = Layout::new(base.join(".cterm"));
+            let agent_dir = base.join("LaunchAgents");
+            let fake = base.join("cterm-daemon-src");
+            fs::create_dir_all(&base).unwrap();
+            fs::write(&fake, b"#!/bin/true\n").unwrap();
+
+            let plist = install_agent(&layout, &agent_dir, &fake, DEFAULT_ADDR).unwrap();
+            assert!(plist.exists());
+            assert!(layout.bin_dir().join("cterm-daemon").exists());
+
+            assert!(remove_agent(&agent_dir).unwrap());
+            assert!(!plist.exists());
+            assert!(!remove_agent(&agent_dir).unwrap());
+            let _ = fs::remove_dir_all(&base);
+        }
+    }
+}
+
 // ================== Fallback for other platforms ==================
-#[cfg(not(any(target_os = "linux", windows)))]
+#[cfg(not(any(target_os = "linux", target_os = "macos", windows)))]
 mod platform {
     use super::*;
 
     pub fn enable(_layout: &Layout) -> CliResult<Vec<String>> {
         Err(CliError::Msg(
-            "daemon autostart is only supported on Linux and Windows".to_owned(),
+            "daemon autostart is only supported on Linux, macOS, and Windows".to_owned(),
         ))
     }
     pub fn disable(_layout: &Layout) -> CliResult<Vec<String>> {

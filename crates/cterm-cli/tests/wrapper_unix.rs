@@ -38,9 +38,10 @@ fn wrapper_runs_real_shell_transparently_and_records() {
     perm.set_mode(0o755);
     fs::set_permissions(&shim, perm).unwrap();
 
-    // Minimal config pointing at the real bash and our db.
+    // Minimal config pointing at the real bash and our db. /bin/bash exists on
+    // both Linux and macOS (unlike /usr/bin/bash).
     let config = format!(
-        r#"{{"db":"{}","shells":{{"bash":"/usr/bin/bash"}}}}"#,
+        r#"{{"db":"{}","shells":{{"bash":"/bin/bash"}}}}"#,
         db.display()
     );
     fs::write(home.join(".cterm/config.json"), config).unwrap();

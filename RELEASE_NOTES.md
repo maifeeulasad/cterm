@@ -1,20 +1,24 @@
-# cterm v0.1.4
+# cterm v0.1.5
 
 A terminal integration / shim tool that lets agents observe, record, stream, and
 drive shell command executions **without ever holding the credentials used to
 open the session**.
 
-> Early release. Working end to end on **Linux and Windows**; shared for
+> Early release. Working end to end on **Linux, macOS, and Windows**; shared for
 > feedback. Expect rough edges.
 
-## Changes since v0.1.3
+## Changes since v0.1.4
 
-- **Fix a Windows hang (regression in v0.1.3).** portable-pty 0.9 creates the
-  pseudo-console with `PSEUDOCONSOLE_INHERIT_CURSOR`, so ConPTY emits a
-  cursor-position query (`ESC[6n`) and blocks the child until the terminal
-  replies. The PTY read loop now answers it (`ESC[1;1R`). Without this, **any
-  command run under the Windows wrapper/daemon would hang** — v0.1.3 Windows
-  binaries are affected; use **v0.1.4**.
+- **macOS support.** The CLI/shim, daemon (gRPC + Unix-socket IPC), storage, and
+  webview build and are tested on macOS in CI. Autostart uses a **launchd**
+  LaunchAgent (`cterm service enable`). Prebuilt binaries for **Apple Silicon
+  (arm64)** and **Intel (x86_64)** are attached below.
+
+## Earlier
+
+- **v0.1.4 — Windows hang fix:** portable-pty 0.9 enables
+  `PSEUDOCONSOLE_INHERIT_CURSOR`; ConPTY blocks on a cursor query (`ESC[6n`) until
+  the terminal replies. The PTY read loop now answers it (`ESC[1;1R`).
 
 ## Earlier
 
@@ -49,8 +53,20 @@ Binaries: `cterm` (CLI + shim), `cterm-daemon`, `cterm-web`.
 ### Linux (x86_64)
 
 ```bash
-VER=v0.1.4
+VER=v0.1.5
 curl -fsSL "https://github.com/maifeeulasad/cterm/releases/download/$VER/cterm-$VER-x86_64-linux.tar.gz" | tar -xz
+sudo install -m 0755 cterm cterm-daemon cterm-web /usr/local/bin/
+cterm --help
+```
+
+### macOS (Apple Silicon or Intel)
+
+```bash
+VER=v0.1.5
+ARCH=$([ "$(uname -m)" = "arm64" ] && echo aarch64 || echo x86_64)
+curl -fsSL "https://github.com/maifeeulasad/cterm/releases/download/$VER/cterm-$VER-$ARCH-macos.tar.gz" | tar -xz
+# Gatekeeper quarantines downloaded binaries; clear it, then install:
+xattr -dr com.apple.quarantine cterm cterm-daemon cterm-web 2>/dev/null || true
 sudo install -m 0755 cterm cterm-daemon cterm-web /usr/local/bin/
 cterm --help
 ```
@@ -58,7 +74,7 @@ cterm --help
 ### Windows (x86_64, PowerShell)
 
 ```powershell
-$ver = "v0.1.4"
+$ver = "v0.1.5"
 Invoke-WebRequest "https://github.com/maifeeulasad/cterm/releases/download/$ver/cterm-$ver-x86_64-windows.zip" -OutFile cterm.zip
 Expand-Archive cterm.zip -DestinationPath "$env:LOCALAPPDATA\cterm" -Force
 # Add "$env:LOCALAPPDATA\cterm" to your PATH, then:
@@ -74,12 +90,11 @@ GitHub Actions). Verify that an archive was built by this repo's release
 workflow:
 
 ```bash
-gh attestation verify cterm-v0.1.4-x86_64-linux.tar.gz --repo maifeeulasad/cterm
+gh attestation verify cterm-v0.1.5-x86_64-linux.tar.gz --repo maifeeulasad/cterm
 ```
 
 ## Known limitations
 
-- macOS is not built yet.
 - On Windows, the wrapper's window-resize (SIGWINCH analogue) isn't wired yet.
 - Live IPC drives one interactive session per wrapper process.
 

@@ -30,9 +30,10 @@ though, can. `cterm` turns that into a *hybrid* workflow:
 
 ## Status
 
-Working end to end on **Linux and Windows** (macOS next). The daemon, gRPC API,
-SQLite store, shell shim/wrapper, webview, daemon autostart, and live
-**shim→daemon IPC** all build and are tested on both. The IPC makes the hybrid
+Working end to end on **Linux, macOS, and Windows**. The daemon, gRPC API,
+SQLite store, shell shim/wrapper, webview, daemon autostart (systemd on Linux,
+launchd on macOS, a Startup entry on Windows), and live **shim→daemon IPC** all
+build and are tested on all three in CI. The IPC makes the hybrid
 flow live: a human opens an interactive shell through the wrapper, and an agent
 observes and drives it in real time over gRPC — never opening its own connection.
 Transport is a Unix socket on Linux and a named pipe (`\\.\pipe\cterm-daemon`) on

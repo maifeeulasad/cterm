@@ -24,6 +24,12 @@ jobs:
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             archive: cterm-${{ github.ref_name }}-x86_64-windows.zip
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            archive: cterm-${{ github.ref_name }}-aarch64-macos.tar.gz
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            archive: cterm-${{ github.ref_name }}-x86_64-macos.tar.gz
     steps:
       - uses: actions/checkout@v7
 
@@ -52,6 +58,17 @@ jobs:
              README.md LICENSE dist/
           tar -C dist -czf "${{ matrix.archive }}" .
           sha256sum "${{ matrix.archive }}" > "${{ matrix.archive }}.sha256"
+
+      - name: Package (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          mkdir -p dist
+          cp target/${{ matrix.target }}/release/cterm \
+             target/${{ matrix.target }}/release/cterm-daemon \
+             target/${{ matrix.target }}/release/cterm-web \
+             README.md LICENSE dist/
+          tar -C dist -czf "${{ matrix.archive }}" .
+          shasum -a 256 "${{ matrix.archive }}" > "${{ matrix.archive }}.sha256"
 
       - name: Package (Windows)
         if: runner.os == 'Windows'
