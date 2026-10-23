@@ -184,7 +184,9 @@ class ZshTranscriptRenderer {
     this.terminal.open(container);
   }
   render(chunks) {
-    for (const chunk of chunks) this.terminal.write(base64Bytes(chunk.data));
+    for (const chunk of chunks) {
+      if (chunk.kind !== "stdin") this.terminal.write(base64Bytes(chunk.data));
+    }
   }
   dispose() { this.terminal.dispose(); }
 }

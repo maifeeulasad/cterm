@@ -1,10 +1,20 @@
-# cterm v0.2.3
+# cterm v0.3.0
 
 A terminal integration / shim tool that lets agents observe, record, stream, and
 drive shell command executions **without ever holding the credentials used to
 open the session**.
 
 > Early release. Tri-platform; shared for feedback. Expect rough edges.
+
+## 0.3.0 — terminal-emulated Zsh transcripts
+
+- Web transcripts for Zsh now replay the recorded PTY output through xterm.js,
+  preserving colors, cursor movement, Powerlevel10k prompts, and other terminal
+  control sequences instead of displaying them literally.
+- The transcript API exposes ordered raw stream chunks so the webview can
+  reproduce terminal output faithfully.
+- Interactive input is retained in the record but is not rendered a second time
+  when PTY echo has already produced it in the output stream.
 
 ## 0.2.3 — stable download URLs + README download badges
 
