@@ -19,9 +19,8 @@ driven by agents** — without an agent ever needing to hold the credentials use
 to open the session.
 
 > **Downloads:** prebuilt **Linux, macOS (Apple Silicon + Intel), and Windows**
-> binaries (with signed build provenance) are on the
-> [releases page](https://github.com/maifeeulasad/cterm/releases/latest).
-> See the release notes for install commands.
+> binaries are on the [releases page](https://github.com/maifeeulasad/cterm/releases/latest) 
+> with proper signed build provenance. See the release notes for install commands.
 
 ## Why
 
