@@ -8,10 +8,10 @@
 [![License](https://img.shields.io/github/license/maifeeulasad/cterm)](LICENSE)
 
 **Download the latest binaries:**
-[![Windows x64](https://img.shields.io/badge/download-Windows%20x64-0078D6?logo=windows&logoColor=white)](https://github.com/maifeeulasad/cterm/releases/latest/download/cterm-x86_64-windows.zip)
-[![Linux x64](https://img.shields.io/badge/download-Linux%20x64-FCC624?logo=linux&logoColor=black)](https://github.com/maifeeulasad/cterm/releases/latest/download/cterm-x86_64-linux.tar.gz)
-[![macOS arm64](https://img.shields.io/badge/download-macOS%20Apple%20Silicon-000000?logo=apple&logoColor=white)](https://github.com/maifeeulasad/cterm/releases/latest/download/cterm-aarch64-macos.tar.gz)
-[![macOS x64](https://img.shields.io/badge/download-macOS%20Intel-555555?logo=apple&logoColor=white)](https://github.com/maifeeulasad/cterm/releases/latest/download/cterm-x86_64-macos.tar.gz)
+ - [![Windows x64](https://img.shields.io/badge/download-Windows%20x64-0078D6?logo=windows&logoColor=white)](https://github.com/maifeeulasad/cterm/releases/latest/download/cterm-x86_64-windows.zip)
+ - [![Linux x64](https://img.shields.io/badge/download-Linux%20x64-FCC624?logo=linux&logoColor=black)](https://github.com/maifeeulasad/cterm/releases/latest/download/cterm-x86_64-linux.tar.gz)
+ - [![macOS arm64](https://img.shields.io/badge/download-macOS%20Apple%20Silicon-000000?logo=apple&logoColor=white)](https://github.com/maifeeulasad/cterm/releases/latest/download/cterm-aarch64-macos.tar.gz)
+ - [![macOS x64](https://img.shields.io/badge/download-macOS%20Intel-555555?logo=apple&logoColor=white)](https://github.com/maifeeulasad/cterm/releases/latest/download/cterm-x86_64-macos.tar.gz)
 
 A terminal integration / shim tool. `cterm` sits between a process and its
 shell so that command executions can be **streamed, tracked, recorded, and
