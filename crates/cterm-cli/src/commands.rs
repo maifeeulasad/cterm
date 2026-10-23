@@ -155,6 +155,37 @@ fn set_executable(_path: &Path) -> CliResult<()> {
     Ok(())
 }
 
+/// Installs an executable without truncating a file that another process is
+/// currently running. This matters when `cterm install` is run inside the
+/// shell shim being refreshed.
+fn install_executable(source: &Path, destination: &Path) -> CliResult<()> {
+    #[cfg(unix)]
+    {
+        use std::time::{SystemTime, UNIX_EPOCH};
+
+        let suffix = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|duration| duration.as_nanos())
+            .unwrap_or_default();
+        let temporary = destination.with_extension(format!("tmp-{}-{suffix}", std::process::id()));
+        let result = (|| {
+            fs::copy(source, &temporary)?;
+            set_executable(&temporary)?;
+            fs::rename(&temporary, destination)?;
+            Ok(())
+        })();
+        if result.is_err() {
+            let _ = fs::remove_file(&temporary);
+        }
+        result
+    }
+    #[cfg(not(unix))]
+    {
+        fs::copy(source, destination)?;
+        set_executable(destination)
+    }
+}
+
 /// Result of an install.
 #[derive(Debug)]
 pub struct Installed {
@@ -198,7 +229,7 @@ pub fn install(layout: &Layout, requested: &[String]) -> CliResult<Installed> {
         })?;
         let dest = layout.bin_dir().join(shim_file_name(name));
         if dest != exe {
-            fs::copy(&exe, &dest)?;
+            install_executable(&exe, &dest)?;
         }
         set_executable(&dest)?;
         cfg.shells.insert(name.clone(), real.display().to_string());
@@ -268,12 +299,6 @@ pub fn status(layout: &Layout) -> CliResult<Status> {
 #[must_use]
 pub fn path_export_line(layout: &Layout) -> String {
     format!("export PATH=\"{}:$PATH\"", layout.bin_dir().display())
-}
-
-/// Appends the PATH export to `rc`, guarded by markers. Returns `false` if the
-/// marker was already present (idempotent).
-pub fn append_rc(rc: &Path, layout: &Layout) -> CliResult<bool> {
-    append_rc_for_shell(rc, layout, None)
 }
 
 /// Appends the PATH export and, for Zsh, a guarded startup handoff to the
@@ -370,6 +395,28 @@ mod tests {
         let _ = fs::remove_dir_all(&base);
     }
 
+    #[cfg(unix)]
+    #[test]
+    fn executable_install_replaces_existing_file_atomically() {
+        let base = temp_base();
+        fs::create_dir_all(&base).unwrap();
+        let source = base.join("source");
+        let destination = base.join("destination");
+        fs::write(&source, b"new executable").unwrap();
+        fs::write(&destination, b"old executable").unwrap();
+
+        install_executable(&source, &destination).expect("atomic replacement");
+
+        assert_eq!(fs::read(&destination).unwrap(), b"new executable");
+        assert!(!base.read_dir().unwrap().any(|entry| entry
+            .unwrap()
+            .file_name()
+            .to_string_lossy()
+            .contains(".tmp-")));
+
+        let _ = fs::remove_dir_all(&base);
+    }
+
     #[test]
     fn rc_append_is_idempotent() {
         let base = temp_base();
@@ -377,8 +424,8 @@ mod tests {
         fs::create_dir_all(layout.base()).unwrap();
         let rc = layout.base().join(".bashrc");
 
-        assert!(append_rc(&rc, &layout).expect("first append"));
-        assert!(!append_rc(&rc, &layout).expect("second append"));
+        assert!(append_rc_for_shell(&rc, &layout, None).expect("first append"));
+        assert!(!append_rc_for_shell(&rc, &layout, None).expect("second append"));
         let contents = fs::read_to_string(&rc).unwrap();
         assert_eq!(contents.matches("# >>> cterm >>>").count(), 1);
         assert!(contents.contains(&path_export_line(&layout)));
