@@ -273,6 +273,13 @@ pub fn path_export_line(layout: &Layout) -> String {
 /// Appends the PATH export to `rc`, guarded by markers. Returns `false` if the
 /// marker was already present (idempotent).
 pub fn append_rc(rc: &Path, layout: &Layout) -> CliResult<bool> {
+    append_rc_for_shell(rc, layout, None)
+}
+
+/// Appends the PATH export and, for Zsh, a guarded startup handoff to the
+/// cterm shim. The handoff covers terminal hosts such as VS Code that launch
+/// the real shell by absolute path and therefore bypass PATH lookup.
+pub fn append_rc_for_shell(rc: &Path, layout: &Layout, shell: Option<&str>) -> CliResult<bool> {
     const BEGIN: &str = "# >>> cterm >>>";
     const END: &str = "# <<< cterm <<<";
     let existing = fs::read_to_string(rc).unwrap_or_default();
@@ -280,7 +287,24 @@ pub fn append_rc(rc: &Path, layout: &Layout) -> CliResult<bool> {
         return Ok(false);
     }
     use std::io::Write;
-    let block = format!("\n{BEGIN}\n{}\n{END}\n", path_export_line(layout));
+    let zsh_handoff = if shell == Some("zsh") {
+        format!(
+            "\n\
+            if [[ -o interactive && -t 0 && -z \"${{CTERM_WRAPPED-}}\" && -z \"${{CTERM_ZSH_HANDOFF-}}\" && -x \"{}/zsh\" ]]; then\n\
+              export CTERM_ZSH_HANDOFF=1\n\
+              exec \"{}/zsh\" -i\n\
+            fi",
+            layout.bin_dir().display(),
+            layout.bin_dir().display()
+        )
+    } else {
+        String::new()
+    };
+    let block = format!(
+        "\n{BEGIN}\n{}{}\n{END}\n",
+        path_export_line(layout),
+        zsh_handoff
+    );
     let mut f = fs::OpenOptions::new().create(true).append(true).open(rc)?;
     f.write_all(block.as_bytes())?;
     Ok(true)
@@ -358,6 +382,26 @@ mod tests {
         let contents = fs::read_to_string(&rc).unwrap();
         assert_eq!(contents.matches("# >>> cterm >>>").count(), 1);
         assert!(contents.contains(&path_export_line(&layout)));
+
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn zsh_rc_append_adds_guarded_absolute_path_handoff() {
+        let base = temp_base();
+        let layout = Layout::new(&base);
+        fs::create_dir_all(layout.base()).unwrap();
+        let rc = layout.base().join(".zshrc");
+
+        assert!(append_rc_for_shell(&rc, &layout, Some("zsh")).expect("first append"));
+        assert!(!append_rc_for_shell(&rc, &layout, Some("zsh")).expect("second append"));
+
+        let contents = fs::read_to_string(&rc).unwrap();
+        assert_eq!(contents.matches("# >>> cterm >>>").count(), 1);
+        assert!(contents.contains(&path_export_line(&layout)));
+        assert!(contents.contains("CTERM_WRAPPED"));
+        assert!(contents.contains("CTERM_ZSH_HANDOFF"));
+        assert!(contents.contains(&format!("exec \"{}/zsh\" -i", layout.bin_dir().display())));
 
         let _ = fs::remove_dir_all(&base);
     }

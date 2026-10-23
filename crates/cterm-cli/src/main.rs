@@ -99,7 +99,12 @@ fn cmd_install(args: &[String]) -> i32 {
             println!("Records: {}", installed.config.db);
             println!();
             if let Some(rc_path) = rc {
-                match commands::append_rc(Path::new(&rc_path), &layout) {
+                let rc_shell = if shells.len() == 1 {
+                    Some(shells[0].as_str())
+                } else {
+                    None
+                };
+                match commands::append_rc_for_shell(Path::new(&rc_path), &layout, rc_shell) {
                     Ok(true) => {
                         println!("Added PATH entry to {rc_path}. Open a new shell to activate.")
                     }

@@ -114,6 +114,20 @@ cterm status               # show what's wrapped and whether it's on PATH
 A human opens a shell (now wrapped); the agent observes/drives it live over the
 same gRPC API. Browse records with `cterm-web` (`http://127.0.0.1:8088`).
 
+Some terminal hosts, including VS Code's integrated terminal, launch Zsh by
+absolute path (for example `/usr/bin/zsh`) instead of resolving `zsh` through
+`PATH`. For those terminals, install the Zsh startup handoff explicitly:
+
+```bash
+cterm install zsh --rc ~/.zshrc
+```
+
+This adds a guarded handoff in `.zshrc` that starts the installed cterm Zsh
+shim once for interactive TTYs. The `CTERM_WRAPPED` guard prevents recursion,
+and `CTERM_ZSH_HANDOFF` prevents a loop if the shim must fall back to the real
+shell. Non-interactive `zsh -c` invocations remain unchanged unless
+`CTERM_FORCE_RECORD=1` is set.
+
 **Key environment variables:** `CTERM_DB` (records path), `CTERM_ADDR` (daemon
 gRPC addr), `CTERM_SOCK` (shim↔daemon IPC socket/pipe), `CTERM_WEB_ADDR`
 (cterm-web addr), `CTERM_FORCE_RECORD` (record non-interactive shim calls too).
