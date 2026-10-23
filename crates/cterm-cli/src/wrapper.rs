@@ -64,7 +64,19 @@ fn passthrough(name: &str, args: &[String]) -> i32 {
 /// Whether recording is explicitly forced (used by tests and advanced users to
 /// record non-interactive invocations).
 fn force_record() -> bool {
-    std::env::var_os("CTERM_FORCE_RECORD").is_some()
+    force_record_from_env(|key| std::env::var(key).ok())
+}
+
+fn force_record_from_env(get: impl Fn(&str) -> Option<String>) -> bool {
+    if get("CTERM_FORCE_RECORD").is_some() {
+        return true;
+    }
+    if get("COPILOT_CLI").as_deref() == Some("1") {
+        return true;
+    }
+    get("AI_AGENT")
+        .map(|value| value.to_ascii_lowercase().contains("copilot"))
+        .unwrap_or(false)
 }
 
 /// Whether this invocation is non-interactive (a command string or piped stdin)
@@ -76,6 +88,39 @@ fn is_noninteractive(args: &[String]) -> bool {
     }
     use std::io::IsTerminal;
     !std::io::stdin().is_terminal()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::force_record_from_env;
+    use std::collections::HashMap;
+
+    #[test]
+    fn force_record_env_flag_always_enables() {
+        let vars = HashMap::from([(String::from("CTERM_FORCE_RECORD"), String::from("1"))]);
+        assert!(force_record_from_env(|key| vars.get(key).cloned()));
+    }
+
+    #[test]
+    fn copilot_cli_enables_noninteractive_recording() {
+        let vars = HashMap::from([(String::from("COPILOT_CLI"), String::from("1"))]);
+        assert!(force_record_from_env(|key| vars.get(key).cloned()));
+    }
+
+    #[test]
+    fn ai_agent_copilot_enables_noninteractive_recording() {
+        let vars = HashMap::from([(
+            String::from("AI_AGENT"),
+            String::from("github_copilot_vscode_agent"),
+        )]);
+        assert!(force_record_from_env(|key| vars.get(key).cloned()));
+    }
+
+    #[test]
+    fn unrelated_env_does_not_force_recording() {
+        let vars = HashMap::from([(String::from("TERM"), String::from("xterm-256color"))]);
+        assert!(!force_record_from_env(|key| vars.get(key).cloned()));
+    }
 }
 
 /// Attempts the full recording path. Returns `Err` only for *setup* failures

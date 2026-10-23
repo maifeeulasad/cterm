@@ -126,7 +126,19 @@ This adds a guarded handoff in `.zshrc` that starts the installed cterm Zsh
 shim once for interactive TTYs. The `CTERM_WRAPPED` guard prevents recursion,
 and `CTERM_ZSH_HANDOFF` prevents a loop if the shim must fall back to the real
 shell. Non-interactive `zsh -c` invocations remain unchanged unless
-`CTERM_FORCE_RECORD=1` is set.
+`CTERM_FORCE_RECORD=1` is set (Copilot CLI sessions are auto-treated as forced).
+
+For VS Code automation that launches shells directly (tasks, extensions, agent
+command runners), point the automation shell to the shim path so cterm is in
+the execution path:
+
+```json
+{
+  "terminal.integrated.automationProfile.linux": {
+    "path": "${env:HOME}/.cterm/bin/zsh"
+  }
+}
+```
 
 **Key environment variables:** `CTERM_DB` (records path), `CTERM_ADDR` (daemon
 gRPC addr), `CTERM_SOCK` (shim↔daemon IPC socket/pipe), `CTERM_WEB_ADDR`

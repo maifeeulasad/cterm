@@ -88,6 +88,67 @@ fn wrapper_runs_real_shell_transparently_and_records() {
     let _ = fs::remove_dir_all(&home);
 }
 
+#[test]
+fn wrapper_records_command_string_when_copilot_cli_is_set() {
+    let home = temp_dir();
+    let bin = home.join(".cterm/bin");
+    fs::create_dir_all(&bin).unwrap();
+    let db = home.join(".cterm/cterm.db");
+
+    let shim = bin.join("bash");
+    fs::copy(env!("CARGO_BIN_EXE_cterm"), &shim).unwrap();
+    let mut perm = fs::metadata(&shim).unwrap().permissions();
+    perm.set_mode(0o755);
+    fs::set_permissions(&shim, perm).unwrap();
+
+    let config = format!(
+        r#"{{"db":"{}","shells":{{"bash":"/bin/bash"}}}}"#,
+        db.display()
+    );
+    fs::write(home.join(".cterm/config.json"), config).unwrap();
+
+    let output = Command::new(&shim)
+        .env("HOME", &home)
+        .env("COPILOT_CLI", "1")
+        .env_remove("CTERM_FORCE_RECORD")
+        .env_remove("CTERM_WRAPPED")
+        .arg("-c")
+        .arg("echo COPILOT_WRAP_OK; exit 0")
+        .output()
+        .expect("run shim");
+
+    assert!(output.status.success(), "shim exited: {:?}", output.status);
+    assert!(
+        String::from_utf8_lossy(&output.stdout).contains("COPILOT_WRAP_OK"),
+        "stdout was {:?}",
+        String::from_utf8_lossy(&output.stdout)
+    );
+
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    rt.block_on(async {
+        let store = SqliteStore::open(&db).unwrap();
+        let sessions = store.list_sessions().await.unwrap();
+        assert_eq!(sessions.len(), 1, "expected one recorded session");
+
+        let execs = store.list_executions(sessions[0].id).await.unwrap();
+        assert_eq!(execs.len(), 1, "expected one execution");
+
+        let chunks = store.load_chunks(execs[0].id).await.unwrap();
+        let out: Vec<u8> = chunks
+            .iter()
+            .filter(|c| c.kind == StreamKind::Stdout)
+            .flat_map(|c| c.data.clone())
+            .collect();
+        assert!(
+            String::from_utf8_lossy(&out).contains("COPILOT_WRAP_OK"),
+            "recorded stdout was {:?}",
+            String::from_utf8_lossy(&out)
+        );
+    });
+
+    let _ = fs::remove_dir_all(&home);
+}
+
 /// With the session marker already set (as if invoked from inside a wrapped
 /// shell), the shim must pass straight through to the real shell and record
 /// nothing — the loopback / infinite-recursion guard.

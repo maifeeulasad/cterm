@@ -237,6 +237,7 @@ SHELL-SHIM MODE:
     pass straight through (via the CTERM_WRAPPED marker) to avoid recursion and
     loopback. Only interactive sessions are recorded by default; set
     CTERM_FORCE_RECORD=1 to also record `-c`/`/c` and piped (non-tty) invocations.
+    Copilot CLI invocations are treated the same way automatically.
 
 COMPANION BINARIES:
     cterm-daemon  The agent-facing service. Serves a gRPC `Terminal` API on
