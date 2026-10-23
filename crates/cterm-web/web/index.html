@@ -57,7 +57,12 @@
     font-family: ui-monospace, monospace; font-size: 13px; word-break: break-all;
   }
   #transcript-head .meta { color: var(--muted); font-size: 12px; margin-top: 4px; }
-  pre#transcript {
+  #terminal {
+    flex: 1; min-height: 0; padding: 14px 16px; overflow: hidden;
+    background: #0f1115;
+  }
+  #terminal .xterm { height: 100%; }
+  pre#transcript-fallback {
     flex: 1; margin: 0; padding: 14px 16px; overflow: auto; white-space: pre-wrap;
     word-break: break-word; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
     font-size: 13px; color: #c8d0da;
@@ -77,12 +82,16 @@
   <div class="col" id="transcript-wrap">
     <h2 style="position:static">Transcript</h2>
     <div id="transcript-head"><div class="empty">Select an execution</div></div>
-    <pre id="transcript"></pre>
+    <div id="terminal"></div>
+    <pre id="transcript-fallback" hidden></pre>
   </div>
 </main>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.min.css">
+<script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js"></script>
 <script>
 const $ = (id) => document.getElementById(id);
 let state = { session: null, execution: null };
+let terminalRenderer = null;
 
 async function api(path) {
   const r = await fetch(path);
@@ -143,11 +152,45 @@ async function selectExecution(id) {
   state.execution = id;
   if (state.session) selectSessionHighlight();
   try {
-    const { record, text } = await api(`/api/executions/${id}/transcript`);
+    const { record, text, chunks } = await api(`/api/executions/${id}/transcript`);
     $("transcript-head").innerHTML = `<div class="cmd">${(record.command?.raw ?? "").replace(/</g,"&lt;")}</div>
       <div class="meta">${badge(record.status)} · ${record.started_at ?? ""}${record.ended_at ? " → " + record.ended_at : ""}</div>`;
-    $("transcript").textContent = text || "(no output recorded)";
-  } catch (e) { $("transcript").textContent = "Error: " + e.message; }
+    if (record.command?.shell === "zsh" && window.Terminal) {
+      if (terminalRenderer) terminalRenderer.dispose();
+      terminalRenderer = new ZshTranscriptRenderer($("terminal"));
+      terminalRenderer.render(chunks);
+      $("transcript-fallback").hidden = true;
+    } else {
+      showFallback(text);
+    }
+  } catch (e) { showFallback("Error: " + e.message); }
+}
+function showFallback(text) {
+  if (terminalRenderer) { terminalRenderer.dispose(); terminalRenderer = null; }
+  $("terminal").replaceChildren();
+  $("transcript-fallback").hidden = false;
+  $("transcript-fallback").textContent = text || "(no output recorded)";
+}
+
+class ZshTranscriptRenderer {
+  constructor(container) {
+    this.terminal = new Terminal({
+      convertEol: false,
+      cursorBlink: false,
+      disableStdin: true,
+      scrollback: 10000,
+      theme: { background: "#0f1115", foreground: "#c8d0da" }
+    });
+    this.terminal.open(container);
+  }
+  render(chunks) {
+    for (const chunk of chunks) this.terminal.write(base64Bytes(chunk.data));
+  }
+  dispose() { this.terminal.dispose(); }
+}
+function base64Bytes(value) {
+  const binary = atob(value);
+  return Uint8Array.from(binary, (character) => character.charCodeAt(0));
 }
 function selectSessionHighlight() {
   // re-render executions list selection

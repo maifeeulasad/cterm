@@ -80,6 +80,9 @@ async fn api_lists_sessions_executions_and_transcript() {
     let text = body["text"].as_str().unwrap();
     assert!(text.contains("echo hi"), "transcript: {text:?}");
     assert!(text.contains("hello-web"), "transcript: {text:?}");
+    assert_eq!(body["chunks"].as_array().unwrap().len(), 2);
+    assert_eq!(body["chunks"][0]["data"], "ZWNobyBoaQo=");
+    assert_eq!(body["chunks"][1]["data"], "aGVsbG8td2ViCg==");
     assert_eq!(body["record"]["status"]["kind"], "completed");
 
     // Unknown execution -> 404.
