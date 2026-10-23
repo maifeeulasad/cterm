@@ -8,7 +8,7 @@
 //!   * `GET /api/sessions`                          — all sessions
 //!   * `GET /api/sessions/:id/executions`           — executions in a session
 //!   * `GET /api/executions/:id`                    — one execution record
-//!   * `GET /api/executions/:id/transcript`         — record + reconstructed text
+//!   * `GET /api/executions/:id/transcript`         — record + ordered raw chunks
 
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
@@ -106,6 +106,8 @@ struct TranscriptResponse {
     record: ExecutionRecord,
     /// Input and output interleaved in capture (`seq`) order, lossily decoded.
     text: String,
+    /// The original ordered chunks, preserving terminal control bytes.
+    chunks: Vec<cterm_core::StreamChunk>,
 }
 
 async fn transcript(
@@ -123,8 +125,12 @@ async fn transcript(
     // actually occurred.
     let chunks = store.load_chunks(execution).await?;
     let mut text = String::new();
-    for chunk in chunks {
+    for chunk in &chunks {
         text.push_str(&String::from_utf8_lossy(&chunk.data));
     }
-    Ok(Json(TranscriptResponse { record, text }))
+    Ok(Json(TranscriptResponse {
+        record,
+        text,
+        chunks,
+    }))
 }

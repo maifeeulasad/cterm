@@ -27,16 +27,55 @@ use crate::layout::Layout;
 /// Runs as the wrapper for shell `name` with `args`, returning a process exit
 /// code. On any setup failure it falls back to `exec`-ing the real shell.
 pub fn run(name: &str, args: &[String]) -> i32 {
+    // 1. Recursion / loopback guard: if a cterm session is already active in
+    //    this process tree (an ancestor PTY set the marker), pass straight
+    //    through to the real shell. This is what stops a wrapped shell's
+    //    subshells, scripts, and command substitutions from re-wrapping and
+    //    re-connecting to the daemon forever.
+    if std::env::var_os(cterm_shim::WRAPPED_MARKER_ENV).is_some() {
+        return passthrough(name, args);
+    }
+
+    // 2. Noise reduction: only record interactive sessions. A command-string
+    //    invocation (`-c` / `/c`) or non-tty stdin (scripts, tools, pipes)
+    //    passes through unrecorded — unless recording is explicitly forced.
+    if !force_record() && is_noninteractive(args) {
+        return passthrough(name, args);
+    }
+
+    // 3. Outermost interactive session: record it.
     match try_record(name, args) {
         Ok(code) => code,
-        Err(_setup_failed) => match resolve_real_shell(name) {
-            Some(path) => exec_real(&path, args),
-            None => {
-                eprintln!("cterm: could not locate the real '{name}' shell to run");
-                127
-            }
-        },
+        Err(_setup_failed) => passthrough(name, args),
     }
+}
+
+/// Executes the real shell transparently, with no wrapping or recording.
+fn passthrough(name: &str, args: &[String]) -> i32 {
+    match resolve_real_shell(name) {
+        Some(path) => exec_real(&path, args),
+        None => {
+            eprintln!("cterm: could not locate the real '{name}' shell to run");
+            127
+        }
+    }
+}
+
+/// Whether recording is explicitly forced (used by tests and advanced users to
+/// record non-interactive invocations).
+fn force_record() -> bool {
+    std::env::var_os("CTERM_FORCE_RECORD").is_some()
+}
+
+/// Whether this invocation is non-interactive (a command string or piped stdin)
+/// and therefore not worth recording as a session.
+fn is_noninteractive(args: &[String]) -> bool {
+    const CMD_FLAGS: &[&str] = &["-c", "/c", "/C", "-Command", "-command"];
+    if args.iter().any(|a| CMD_FLAGS.contains(&a.as_str())) {
+        return true;
+    }
+    use std::io::IsTerminal;
+    !std::io::stdin().is_terminal()
 }
 
 /// Attempts the full recording path. Returns `Err` only for *setup* failures
@@ -388,18 +427,43 @@ fn current_size() -> (u16, u16) {
 
 /// Finds the real shell to exec: prefer the path recorded at install time,
 /// then fall back to a PATH search that excludes our shim directory.
+///
+/// Every candidate is checked so it never points back at our own shim directory
+/// or this executable — a last line of defence against a self-exec loop even if
+/// the config has been hand-edited incorrectly.
 pub fn resolve_real_shell(name: &str) -> Option<PathBuf> {
+    let bin_dir = Layout::default_home().ok().map(|l| l.bin_dir());
+    let current_exe = std::env::current_exe().ok();
+    let is_real = |p: &Path| -> bool {
+        if let Some(bd) = &bin_dir {
+            if p.parent() == Some(bd.as_path()) {
+                return false; // inside our shim dir
+            }
+        }
+        if let Some(exe) = &current_exe {
+            if p == exe {
+                return false; // this very binary
+            }
+        }
+        true
+    };
+
     if let Ok(layout) = Layout::default_home() {
         if let Ok(cfg) = config::load(&layout) {
             if let Some(real) = cfg.shells.get(name) {
-                return Some(PathBuf::from(real));
+                let p = PathBuf::from(real);
+                if is_real(&p) {
+                    return Some(p);
+                }
             }
         }
         if let Some(real) = commands::find_real_shell(name, &layout.bin_dir()) {
-            return Some(real);
+            if is_real(&real) {
+                return Some(real);
+            }
         }
     }
-    commands::find_real_shell(name, Path::new("/nonexistent"))
+    commands::find_real_shell(name, Path::new("/nonexistent")).filter(|p| is_real(p))
 }
 
 #[cfg(unix)]

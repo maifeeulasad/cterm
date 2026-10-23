@@ -1,25 +1,74 @@
-# cterm v0.1.3
+# cterm v0.3.0
 
 A terminal integration / shim tool that lets agents observe, record, stream, and
 drive shell command executions **without ever holding the credentials used to
 open the session**.
 
-> Early release. Working end to end on **Linux and Windows**; shared for
-> feedback. Expect rough edges.
+> Early release. Tri-platform; shared for feedback. Expect rough edges.
 
-## Changes since v0.1.2
+## 0.3.0 — terminal-emulated Zsh transcripts
 
-- **Dependency maintenance:** `portable-pty` 0.9 (drops the unmaintained
-  `serial` crate — **RUSTSEC-2017-0008 fully resolved, no longer ignored**),
-  `nix` 0.31, `windows-sys` 0.61, `terminal_size` 0.4. The advisory audit is now
-  clean with nothing suppressed.
-- CI: `codeql-action` v4.
+- Web transcripts for Zsh now replay the recorded PTY output through xterm.js,
+  preserving colors, cursor movement, Powerlevel10k prompts, and other terminal
+  control sequences instead of displaying them literally.
+- The transcript API exposes ordered raw stream chunks so the webview can
+  reproduce terminal output faithfully.
+- Interactive input is retained in the record but is not rendered a second time
+  when PTY echo has already produced it in the output stream.
 
-## Earlier (v0.1.2)
+## 0.2.3 — stable download URLs + README download badges
 
-- **Security:** upgraded the HTTP stack to **hyper 1.x / tonic 0.14 / axum 0.8 /
-  tower 0.5** (pulling `h2` ≥ 0.4.20), resolving **RUSTSEC-2026-0258** (`h2`
-  DoS). CI/CodeQL/audit no longer run on Dependabot-authored events.
+- Release assets now have **version-less names** (e.g. `cterm-x86_64-linux.tar.gz`),
+  so `…/releases/latest/download/<name>` always points to the newest build.
+- README gained per-platform **download badges** (Windows / Linux / macOS
+  Apple Silicon / macOS Intel) and a downloads-count badge.
+
+## 0.2.2 — docs & help for agents
+
+- Rewrote `cterm --help` to describe the whole system (the gRPC `Terminal` API,
+  the `cterm-daemon`/`cterm-web` companions, env vars, and the per-platform
+  wrappable shells), and added `--version`. Help now prints to stdout.
+- README: corrected the crate table (all crates are shipped, not planned) and
+  the shim description (reversible PATH shim, no shell renaming), and added an
+  agent-oriented Usage section. No functional changes.
+
+## 0.2.1 — broader shells, no loopback
+
+- **More shells.** The shim can now wrap a wide set per platform: Linux/macOS —
+  `bash zsh sh dash fish ksh tcsh csh ash mksh nu elvish xonsh pwsh`; Windows —
+  `cmd powershell pwsh bash sh zsh fish nu ksh`. (The shim is shell-agnostic — it
+  just runs the real program under a PTY — so coverage is about which names it
+  intercepts.) Default install stays the common interactive shells.
+- **Loopback / infinite-recursion guard.** Every PTY-spawned process tree is
+  marked (`CTERM_WRAPPED`); a shim invoked anywhere beneath a cterm session
+  passes straight through to the real shell instead of wrapping again. This stops
+  a wrapped shell's subshells, scripts, and command substitutions from endlessly
+  re-wrapping and re-connecting to the daemon.
+- **Only interactive sessions are recorded** by default: `-c`/`/c` command
+  invocations and piped (non-tty) input pass through unrecorded, cutting noise
+  from scripts and tooling. Plus a self-exec guard so the real shell can never
+  resolve back to the shim.
+
+## 0.2.0 — tri-platform
+
+cterm now runs on **Linux, macOS, and Windows** — all three are built and tested
+in CI, with signed, provenance-backed binaries for each. This minor bump marks
+that coverage milestone (adding macOS was a big expansion).
+
+- **macOS:** CLI/shim, daemon (gRPC + Unix-socket IPC), storage, and webview;
+  autostart via a **launchd** LaunchAgent; binaries for **Apple Silicon (arm64)**
+  and **Intel (x86_64)**.
+- Everything from 0.1.x: transparent shell shim, gRPC agent API, live
+  shim↔daemon IPC, SQLite records, webview, and daemon autostart (systemd /
+  launchd / Startup).
+
+## Earlier
+
+- **v0.1.3 — dependency maintenance:** `portable-pty` 0.9 (drops the unmaintained
+  `serial` crate — **RUSTSEC-2017-0008 fully resolved**), `nix` 0.31,
+  `windows-sys` 0.61, `terminal_size` 0.4, `codeql-action` v4.
+- **v0.1.2 — security:** HTTP stack to **hyper 1.x / tonic 0.14 / axum 0.8 /
+  tower 0.5** (`h2` ≥ 0.4.20), resolving **RUSTSEC-2026-0258** (`h2` DoS).
 
 ## Highlights
 
@@ -43,11 +92,24 @@ open the session**.
 
 Binaries: `cterm` (CLI + shim), `cterm-daemon`, `cterm-web`.
 
+Asset names are version-less, so these `latest/download` URLs always fetch the
+newest release.
+
 ### Linux (x86_64)
 
 ```bash
-VER=v0.1.3
-curl -fsSL "https://github.com/maifeeulasad/cterm/releases/download/$VER/cterm-$VER-x86_64-linux.tar.gz" | tar -xz
+curl -fsSL "https://github.com/maifeeulasad/cterm/releases/latest/download/cterm-x86_64-linux.tar.gz" | tar -xz
+sudo install -m 0755 cterm cterm-daemon cterm-web /usr/local/bin/
+cterm --help
+```
+
+### macOS (Apple Silicon or Intel)
+
+```bash
+ARCH=$([ "$(uname -m)" = "arm64" ] && echo aarch64 || echo x86_64)
+curl -fsSL "https://github.com/maifeeulasad/cterm/releases/latest/download/cterm-$ARCH-macos.tar.gz" | tar -xz
+# Gatekeeper quarantines downloaded binaries; clear it, then install:
+xattr -dr com.apple.quarantine cterm cterm-daemon cterm-web 2>/dev/null || true
 sudo install -m 0755 cterm cterm-daemon cterm-web /usr/local/bin/
 cterm --help
 ```
@@ -55,8 +117,7 @@ cterm --help
 ### Windows (x86_64, PowerShell)
 
 ```powershell
-$ver = "v0.1.3"
-Invoke-WebRequest "https://github.com/maifeeulasad/cterm/releases/download/$ver/cterm-$ver-x86_64-windows.zip" -OutFile cterm.zip
+Invoke-WebRequest "https://github.com/maifeeulasad/cterm/releases/latest/download/cterm-x86_64-windows.zip" -OutFile cterm.zip
 Expand-Archive cterm.zip -DestinationPath "$env:LOCALAPPDATA\cterm" -Force
 # Add "$env:LOCALAPPDATA\cterm" to your PATH, then:
 cterm.exe --help
@@ -71,12 +132,11 @@ GitHub Actions). Verify that an archive was built by this repo's release
 workflow:
 
 ```bash
-gh attestation verify cterm-v0.1.3-x86_64-linux.tar.gz --repo maifeeulasad/cterm
+gh attestation verify cterm-x86_64-linux.tar.gz --repo maifeeulasad/cterm
 ```
 
 ## Known limitations
 
-- macOS is not built yet.
 - On Windows, the wrapper's window-resize (SIGWINCH analogue) isn't wired yet.
 - Live IPC drives one interactive session per wrapper process.
 

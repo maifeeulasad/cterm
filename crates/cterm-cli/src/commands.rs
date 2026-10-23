@@ -15,15 +15,30 @@ use crate::layout::Layout;
 
 /// Shell basenames we are willing to wrap.
 #[cfg(windows)]
-pub const WRAPPABLE: &[&str] = &["cmd", "powershell", "pwsh", "bash"];
+pub const WRAPPABLE: &[&str] = &[
+    "cmd",
+    "powershell",
+    "pwsh",
+    "bash",
+    "sh",
+    "zsh",
+    "fish",
+    "nu",
+    "ksh",
+];
 #[cfg(not(windows))]
-pub const WRAPPABLE: &[&str] = &["bash", "zsh", "sh", "dash", "fish", "ksh"];
+pub const WRAPPABLE: &[&str] = &[
+    "bash", "zsh", "sh", "dash", "fish", "ksh", "tcsh", "csh", "ash", "mksh", "nu", "elvish",
+    "xonsh", "pwsh",
+];
 
-/// Shells installed by default when none are named.
+/// Shells installed by default when none are named (filtered to those present).
+/// Kept to common *interactive* shells; others can be installed explicitly to
+/// avoid wrapping shells that mostly run scripts (e.g. `sh`, `cmd`).
 #[cfg(windows)]
-const DEFAULT_SHELLS: &[&str] = &["powershell", "cmd"];
+const DEFAULT_SHELLS: &[&str] = &["pwsh", "powershell"];
 #[cfg(not(windows))]
-const DEFAULT_SHELLS: &[&str] = &["zsh", "bash"];
+const DEFAULT_SHELLS: &[&str] = &["zsh", "bash", "fish"];
 
 /// Normalizes an invoked program name to a bare, lowercase shell name:
 /// strips any directory and (on Windows) a trailing `.exe`.
