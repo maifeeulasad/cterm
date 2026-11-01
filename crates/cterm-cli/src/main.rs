@@ -13,6 +13,7 @@ mod commands;
 mod config;
 mod error;
 mod layout;
+mod selfcmd;
 mod service;
 #[cfg(windows)]
 mod win_console;
@@ -45,6 +46,7 @@ fn cli(args: &[String]) -> i32 {
         Some("uninstall") => cmd_uninstall(),
         Some("status") => cmd_status(),
         Some("service") => cmd_service(&args[1..]),
+        Some("doctor") => selfcmd::doctor(&layout_or_die()),
         Some("-h") | Some("--help") | Some("help") | None => {
             // Help goes to stdout so it can be captured by scripts/agents.
             println!("{}", usage());
@@ -223,6 +225,8 @@ COMMANDS:
     service <enable|disable|status>
         Daemon autostart for the current user: systemd --user (Linux),
         a launchd LaunchAgent (macOS), or a Startup entry (Windows).
+    doctor                        Diagnose the install (version/update, binaries,
+                                  shims, PATH, records db, daemon, autostart).
     -h, --help                    Show this help (on stdout).
     -V, --version                 Show the version.
 
