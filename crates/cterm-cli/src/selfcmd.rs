@@ -4,7 +4,7 @@
 //! build across platforms; hashing uses the pure-Rust `sha2`.
 
 use std::net::{TcpStream, ToSocketAddrs};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::Duration;
 
@@ -30,6 +30,153 @@ pub fn bin_name(base: &str) -> String {
     {
         base.to_owned()
     }
+}
+
+/// Where `cterm link` should place the binaries.
+#[derive(Clone, Copy)]
+pub enum LinkScope {
+    /// A system-wide bin dir (`/usr/local/bin`, or `%ProgramFiles%\cterm`).
+    System,
+    /// A per-user bin dir (`~/.local/bin`, or `%LOCALAPPDATA%\cterm\bin`).
+    User,
+}
+
+fn user_bin() -> Option<PathBuf> {
+    #[cfg(windows)]
+    {
+        std::env::var_os("LOCALAPPDATA").map(|p| PathBuf::from(p).join("cterm").join("bin"))
+    }
+    #[cfg(not(windows))]
+    {
+        std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".local").join("bin"))
+    }
+}
+
+fn system_bin() -> PathBuf {
+    #[cfg(windows)]
+    {
+        let base = std::env::var_os("ProgramFiles").unwrap_or_else(|| r"C:\Program Files".into());
+        PathBuf::from(base).join("cterm")
+    }
+    #[cfg(not(windows))]
+    {
+        PathBuf::from("/usr/local/bin")
+    }
+}
+
+fn dir_on_path(dir: &Path) -> bool {
+    std::env::var_os("PATH")
+        .map(|p| std::env::split_paths(&p).any(|e| e == dir))
+        .unwrap_or(false)
+}
+
+/// Place `src` at `dst`: a symlink on Unix, a copy on Windows (no symlink
+/// privilege required). Any existing entry at `dst` is replaced.
+fn place(src: &Path, dst: &Path) -> std::io::Result<()> {
+    #[cfg(not(windows))]
+    {
+        let _ = std::fs::remove_file(dst);
+        std::os::unix::fs::symlink(src, dst)
+    }
+    #[cfg(windows)]
+    {
+        std::fs::copy(src, dst).map(|_| ())
+    }
+}
+
+/// `cterm link [--system|--user]` — put the `cterm`, `cterm-daemon`, and
+/// `cterm-web` binaries sitting next to this executable onto a bin directory.
+/// Never edits PATH silently; prints guidance if the target isn't on PATH.
+pub fn link(scope: LinkScope) -> i32 {
+    let exe = match std::env::current_exe() {
+        Ok(e) => e,
+        Err(e) => {
+            eprintln!("cterm: cannot locate this executable: {e}");
+            return 1;
+        }
+    };
+    let Some(src_dir) = exe.parent().map(Path::to_path_buf) else {
+        eprintln!("cterm: cannot locate the binary directory");
+        return 1;
+    };
+
+    let target = match scope {
+        LinkScope::System => system_bin(),
+        LinkScope::User => match user_bin() {
+            Some(p) => p,
+            None => {
+                eprintln!("cterm: cannot determine a user bin dir (HOME/LOCALAPPDATA unset)");
+                return 1;
+            }
+        },
+    };
+
+    let system = matches!(scope, LinkScope::System);
+    if let Err(e) = std::fs::create_dir_all(&target) {
+        eprintln!("cterm: cannot create {}: {e}", target.display());
+        if system {
+            eprintln!(
+                "  (system scope may need elevated privileges — re-run with sudo / as admin)"
+            );
+        }
+        return 1;
+    }
+
+    let mut placed = Vec::new();
+    for base in ["cterm", "cterm-daemon", "cterm-web"] {
+        let name = bin_name(base);
+        let src = src_dir.join(&name);
+        if !src.exists() {
+            continue;
+        }
+        let dst = target.join(&name);
+        if src == dst {
+            continue; // already in place
+        }
+        if let Err(e) = place(&src, &dst) {
+            eprintln!(
+                "cterm: cannot link {} -> {}: {e}",
+                dst.display(),
+                src.display()
+            );
+            if system {
+                eprintln!("  (system scope may need elevated privileges)");
+            }
+            return 1;
+        }
+        placed.push(name);
+    }
+
+    if placed.is_empty() {
+        println!(
+            "Nothing to link (no cterm binaries found next to {}).",
+            exe.display()
+        );
+        return 0;
+    }
+
+    #[cfg(windows)]
+    let verb = "Copied";
+    #[cfg(not(windows))]
+    let verb = "Linked";
+    println!("{verb} into {}: {}", target.display(), placed.join(", "));
+
+    if !dir_on_path(&target) {
+        println!("\n{} is not on your PATH.", target.display());
+        #[cfg(windows)]
+        {
+            println!("  this session:  $env:PATH += \";{}\"", target.display());
+            println!(
+                "  to persist:    add it under System -> Environment Variables -> Path (User)"
+            );
+        }
+        #[cfg(not(windows))]
+        println!(
+            "  export PATH=\"{}:$PATH\"   (add to your shell rc to persist)",
+            target.display()
+        );
+    }
+    0
 }
 
 /// The latest release version (without a leading `v`), read from the

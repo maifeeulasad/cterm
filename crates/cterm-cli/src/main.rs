@@ -47,6 +47,7 @@ fn cli(args: &[String]) -> i32 {
         Some("status") => cmd_status(),
         Some("service") => cmd_service(&args[1..]),
         Some("doctor") => selfcmd::doctor(&layout_or_die()),
+        Some("link") => cmd_link(&args[1..]),
         Some("-h") | Some("--help") | Some("help") | None => {
             // Help goes to stdout so it can be captured by scripts/agents.
             println!("{}", usage());
@@ -178,6 +179,21 @@ fn cmd_status() -> i32 {
     }
 }
 
+fn cmd_link(args: &[String]) -> i32 {
+    let mut scope = selfcmd::LinkScope::User;
+    for a in args {
+        match a.as_str() {
+            "--system" => scope = selfcmd::LinkScope::System,
+            "--user" => scope = selfcmd::LinkScope::User,
+            other => {
+                eprintln!("cterm: link: unknown flag '{other}' (use --system or --user)");
+                return 2;
+            }
+        }
+    }
+    selfcmd::link(scope)
+}
+
 fn cmd_service(args: &[String]) -> i32 {
     let layout = layout_or_die();
     let result = match args.first().map(String::as_str) {
@@ -225,6 +241,11 @@ COMMANDS:
     service <enable|disable|status>
         Daemon autostart for the current user: systemd --user (Linux),
         a launchd LaunchAgent (macOS), or a Startup entry (Windows).
+    link [--system|--user]
+        Put the cterm/cterm-daemon/cterm-web binaries next to this one onto a
+        bin dir (--user: ~/.local/bin or %LOCALAPPDATA%\\cterm\\bin [default];
+        --system: /usr/local/bin or %ProgramFiles%\\cterm). Symlinks on Unix,
+        copies on Windows. Never edits PATH; prints how if the dir isn't on it.
     doctor                        Diagnose the install (version/update, binaries,
                                   shims, PATH, records db, daemon, autostart).
     -h, --help                    Show this help (on stdout).
