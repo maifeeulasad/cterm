@@ -1,10 +1,33 @@
-# cterm v0.3.0
+# cterm v0.4.0
 
 A terminal integration / shim tool that lets agents observe, record, stream, and
 drive shell command executions **without ever holding the credentials used to
 open the session**.
 
 > Early release. Tri-platform; shared for feedback. Expect rough edges.
+
+## 0.4.0 — self-serving commands
+
+`cterm` can now manage its own lifecycle (issue #23):
+
+- **`cterm update`** (alias **`upgrade`**) — downloads the latest release for
+  this platform, **verifies it against the published `sha256`** (and refuses to
+  install on a mismatch), then replaces the running binary and the sibling
+  `cterm-daemon`/`cterm-web` binaries in place. `--check` only reports whether
+  an update is available; it's a no-op when you're already current.
+- **`cterm link [--system|--user]`** — puts the `cterm`/`cterm-daemon`/
+  `cterm-web` binaries next to the current one onto a bin directory. `--user`
+  (default) targets `~/.local/bin` (or `%LOCALAPPDATA%\cterm\bin`); `--system`
+  targets `/usr/local/bin` (or `%ProgramFiles%\cterm`). Symlinks on Unix, copies
+  on Windows. It never edits `PATH` silently — it prints how if the dir isn't on
+  it.
+- **`cterm uninstall --all` / `--purge`** — `--all` also disables autostart and
+  removes the config/runtime/shim directories (recordings kept); `--purge`
+  additionally deletes the whole install root **including recordings** and
+  requires an explicit `--yes`.
+- **`cterm doctor`** — a read-only diagnosis of the whole install: version and
+  update availability, the companion binaries, installed shims and `PATH`, the
+  records database, daemon reachability, and autostart state.
 
 ## 0.3.0 — terminal-emulated Zsh transcripts
 
