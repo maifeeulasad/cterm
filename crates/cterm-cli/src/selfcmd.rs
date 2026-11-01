@@ -388,6 +388,98 @@ fn update_in(exe: &Path, asset: &str, work: &Path) -> Result<(), String> {
     self_replace::self_replace(&new_cterm).map_err(|e| format!("replacing the running binary: {e}"))
 }
 
+fn remove_path(p: &Path) {
+    let r = if p.is_dir() {
+        std::fs::remove_dir_all(p)
+    } else {
+        std::fs::remove_file(p)
+    };
+    match r {
+        Ok(()) => {}
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => eprintln!("cterm: warning: could not remove {}: {e}", p.display()),
+    }
+}
+
+/// `cterm uninstall [--all] [--purge] [--yes]`.
+///
+/// * default — remove the shims only; config, autostart, and recordings kept.
+/// * `--all` — also disable autostart and remove config/runtime/shim dirs, but
+///   keep the recordings database.
+/// * `--purge` — everything `--all` does, then delete the whole install root
+///   including recordings. Requires `--yes`; it never deletes recordings
+///   otherwise.
+pub fn uninstall(layout: &Layout, all: bool, purge: bool, yes: bool) -> i32 {
+    if purge && !yes {
+        eprintln!(
+            "cterm: `uninstall --purge` would delete your recordings in {}.",
+            layout.base().display()
+        );
+        eprintln!("  Re-run to confirm:  cterm uninstall --purge --yes");
+        return 2;
+    }
+
+    match commands::uninstall(layout) {
+        Ok(removed) if removed.is_empty() => {
+            println!("No shims to remove at {}.", layout.bin_dir().display());
+        }
+        Ok(removed) => println!("Removed shims: {}", removed.join(", ")),
+        Err(e) => {
+            eprintln!("cterm: uninstall failed: {e}");
+            return 1;
+        }
+    }
+
+    if !all && !purge {
+        println!("Remove the cterm PATH entry from your shell rc if you added one.");
+        println!(
+            "(Config, autostart, and recordings kept — use --all to remove them, --purge to also delete recordings.)"
+        );
+        return 0;
+    }
+
+    match service::disable(layout) {
+        Ok(lines) => {
+            for l in lines {
+                println!("{l}");
+            }
+        }
+        Err(e) => eprintln!("cterm: warning: could not disable autostart: {e}"),
+    }
+
+    for p in [layout.config_path(), layout.run_dir(), layout.bin_dir()] {
+        remove_path(&p);
+    }
+    println!("Removed config, runtime, and shim directories.");
+
+    if purge {
+        let base = layout.base();
+        match std::fs::remove_dir_all(base) {
+            Ok(()) => println!("Purged {} (recordings deleted).", base.display()),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                println!("{} is already gone.", base.display());
+            }
+            Err(e) => {
+                eprintln!("cterm: could not purge {}: {e}", base.display());
+                return 1;
+            }
+        }
+        if let Some(db) = std::env::var_os("CTERM_DB") {
+            let db = PathBuf::from(db);
+            if !db.starts_with(base) {
+                println!(
+                    "Note: CTERM_DB points outside the install root ({}); left untouched.",
+                    db.display()
+                );
+            }
+        }
+    } else {
+        println!("Recordings kept at {}.", layout.default_db().display());
+    }
+    println!("Remove the cterm PATH entry from your shell rc if you added one.");
+    0
+}
+
 /// `cterm doctor` — read-only self-diagnosis of the whole install.
 pub fn doctor(layout: &Layout) -> i32 {
     println!("cterm doctor\n");

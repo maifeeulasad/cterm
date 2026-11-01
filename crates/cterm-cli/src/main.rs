@@ -43,7 +43,7 @@ fn main() {
 fn cli(args: &[String]) -> i32 {
     match args.first().map(String::as_str) {
         Some("install") => cmd_install(&args[1..]),
-        Some("uninstall") => cmd_uninstall(),
+        Some("uninstall") => cmd_uninstall(&args[1..]),
         Some("status") => cmd_status(),
         Some("service") => cmd_service(&args[1..]),
         Some("doctor") => selfcmd::doctor(&layout_or_die()),
@@ -126,26 +126,20 @@ fn cmd_install(args: &[String]) -> i32 {
     }
 }
 
-fn cmd_uninstall() -> i32 {
-    let layout = layout_or_die();
-    match commands::uninstall(&layout) {
-        Ok(removed) if removed.is_empty() => {
-            println!(
-                "Nothing to uninstall (no shims at {}).",
-                layout.bin_dir().display()
-            );
-            0
-        }
-        Ok(removed) => {
-            println!("Removed shims: {}", removed.join(", "));
-            println!("Remove the cterm PATH entry from your shell rc if you added one.");
-            0
-        }
-        Err(e) => {
-            eprintln!("cterm: uninstall failed: {e}");
-            1
+fn cmd_uninstall(args: &[String]) -> i32 {
+    let (mut all, mut purge, mut yes) = (false, false, false);
+    for a in args {
+        match a.as_str() {
+            "--all" => all = true,
+            "--purge" => purge = true,
+            "--yes" | "-y" => yes = true,
+            other => {
+                eprintln!("cterm: uninstall: unknown flag '{other}' (use --all, --purge, --yes)");
+                return 2;
+            }
         }
     }
+    selfcmd::uninstall(&layout_or_die(), all, purge, yes)
 }
 
 fn cmd_status() -> i32 {
@@ -251,7 +245,10 @@ COMMANDS:
         common interactive shells present on this system). --rc <file> appends
         the PATH entry to that shell rc file. Wrappable names on this platform:
         {wrappable}.
-    uninstall                     Remove installed shims (records are kept).
+    uninstall [--all] [--purge [--yes]]
+        Remove installed shims. --all also disables autostart and removes the
+        config/runtime/shim dirs (recordings kept). --purge additionally deletes
+        the whole install root including recordings, and requires --yes.
     status                        Show install state (shims, PATH, records, shells).
     service <enable|disable|status>
         Daemon autostart for the current user: systemd --user (Linux),
