@@ -48,6 +48,7 @@ fn cli(args: &[String]) -> i32 {
         Some("service") => cmd_service(&args[1..]),
         Some("doctor") => selfcmd::doctor(&layout_or_die()),
         Some("link") => cmd_link(&args[1..]),
+        Some("update") | Some("upgrade") => cmd_update(&args[1..]),
         Some("-h") | Some("--help") | Some("help") | None => {
             // Help goes to stdout so it can be captured by scripts/agents.
             println!("{}", usage());
@@ -179,6 +180,20 @@ fn cmd_status() -> i32 {
     }
 }
 
+fn cmd_update(args: &[String]) -> i32 {
+    let mut check_only = false;
+    for a in args {
+        match a.as_str() {
+            "--check" => check_only = true,
+            other => {
+                eprintln!("cterm: update: unknown flag '{other}' (use --check)");
+                return 2;
+            }
+        }
+    }
+    selfcmd::update(check_only)
+}
+
 fn cmd_link(args: &[String]) -> i32 {
     let mut scope = selfcmd::LinkScope::User;
     for a in args {
@@ -241,6 +256,10 @@ COMMANDS:
     service <enable|disable|status>
         Daemon autostart for the current user: systemd --user (Linux),
         a launchd LaunchAgent (macOS), or a Startup entry (Windows).
+    update [--check]  (alias: upgrade)
+        Download the latest release for this platform, verify it against the
+        published sha256, and replace this binary (and the sibling daemon/web
+        binaries) in place. --check only reports whether an update is available.
     link [--system|--user]
         Put the cterm/cterm-daemon/cterm-web binaries next to this one onto a
         bin dir (--user: ~/.local/bin or %LOCALAPPDATA%\\cterm\\bin [default];

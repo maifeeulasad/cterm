@@ -20,6 +20,17 @@ const NULL_DEVICE: &str = "NUL";
 #[cfg(not(windows))]
 const NULL_DEVICE: &str = "/dev/null";
 
+/// The version-less release asset name for the current platform, if supported.
+pub fn platform_asset() -> Option<&'static str> {
+    match (std::env::consts::OS, std::env::consts::ARCH) {
+        ("linux", "x86_64") => Some("cterm-x86_64-linux.tar.gz"),
+        ("macos", "aarch64") => Some("cterm-aarch64-macos.tar.gz"),
+        ("macos", "x86_64") => Some("cterm-x86_64-macos.tar.gz"),
+        ("windows", "x86_64") => Some("cterm-x86_64-windows.zip"),
+        _ => None,
+    }
+}
+
 /// A binary's file name on this platform (adds `.exe` on Windows).
 pub fn bin_name(base: &str) -> String {
     #[cfg(windows)]
@@ -231,6 +242,150 @@ fn parent_writable(path: &Path) -> bool {
         }
         Err(_) => false,
     }
+}
+
+fn curl_to(url: &str, dest: &Path) -> std::io::Result<()> {
+    let Some(dest_s) = dest.to_str() else {
+        return Err(std::io::Error::other("non-UTF-8 download path"));
+    };
+    let status = Command::new("curl")
+        .args(["-fsSL", "-o", dest_s, url])
+        .status()?;
+    if status.success() {
+        Ok(())
+    } else {
+        Err(std::io::Error::other(format!("curl failed for {url}")))
+    }
+}
+
+fn sha256_hex(path: &Path) -> std::io::Result<String> {
+    use sha2::{Digest, Sha256};
+    let bytes = std::fs::read(path)?;
+    let digest = Sha256::digest(&bytes);
+    Ok(digest.iter().map(|b| format!("{b:02x}")).collect())
+}
+
+/// `cterm update` / `cterm upgrade` — download the latest release for this
+/// platform, verify it against the published `.sha256`, and replace the running
+/// binary (and the sibling daemon/web binaries) in place. With `check_only`,
+/// only report whether an update is available.
+pub fn update(check_only: bool) -> i32 {
+    let current = env!("CARGO_PKG_VERSION");
+    let Some(latest) = latest_version() else {
+        eprintln!("cterm: could not determine the latest version (need curl + network).");
+        return 1;
+    };
+
+    if !is_newer(&latest, current) {
+        println!("cterm {current} is up to date (latest is {latest}).");
+        return 0;
+    }
+    println!("Update available: {current} -> {latest}");
+    if check_only {
+        return 0;
+    }
+
+    let Some(asset) = platform_asset() else {
+        eprintln!(
+            "cterm: no prebuilt release for this platform ({}/{}); build from source or download manually.",
+            std::env::consts::OS,
+            std::env::consts::ARCH
+        );
+        return 1;
+    };
+
+    let exe = match std::env::current_exe() {
+        Ok(e) => e,
+        Err(e) => {
+            eprintln!("cterm: cannot locate this executable: {e}");
+            return 1;
+        }
+    };
+
+    let work = std::env::temp_dir().join(format!("cterm-update-{}", std::process::id()));
+    if let Err(e) = std::fs::create_dir_all(&work) {
+        eprintln!("cterm: cannot create temp dir {}: {e}", work.display());
+        return 1;
+    }
+    let rc = update_in(&exe, asset, &work);
+    let _ = std::fs::remove_dir_all(&work);
+    match rc {
+        Ok(()) => {
+            println!("Updated to {latest}. Restart any running shims or the daemon to pick it up.");
+            0
+        }
+        Err(e) => {
+            eprintln!("cterm: update failed: {e}");
+            1
+        }
+    }
+}
+
+/// The download + verify + replace steps, so the caller can always clean up the
+/// work dir regardless of outcome.
+fn update_in(exe: &Path, asset: &str, work: &Path) -> Result<(), String> {
+    let base = format!("https://github.com/{REPO}/releases/latest/download/{asset}");
+    let archive = work.join(asset);
+    let sums = work.join(format!("{asset}.sha256"));
+
+    println!("Downloading {asset} ...");
+    curl_to(&base, &archive).map_err(|e| e.to_string())?;
+    curl_to(&format!("{base}.sha256"), &sums).map_err(|e| e.to_string())?;
+
+    // Published checksum file is `<hex>  <name>`; take the first token.
+    let published = std::fs::read_to_string(&sums)
+        .map_err(|e| e.to_string())?
+        .split_whitespace()
+        .next()
+        .unwrap_or("")
+        .to_lowercase();
+    if published.len() != 64 {
+        return Err(format!("unexpected checksum in {asset}.sha256"));
+    }
+    let actual = sha256_hex(&archive).map_err(|e| e.to_string())?;
+    if actual != published {
+        return Err(format!(
+            "checksum mismatch (expected {published}, got {actual}) — refusing to install"
+        ));
+    }
+    println!("Checksum verified.");
+
+    // bsdtar (Windows 10+, macOS) and GNU tar all autodetect gzip; bsdtar also
+    // extracts the Windows .zip. So a single `tar -xf` covers every asset.
+    let archive_s = archive.to_str().ok_or("non-UTF-8 archive path")?;
+    let work_s = work.to_str().ok_or("non-UTF-8 work path")?;
+    let status = Command::new("tar")
+        .args(["-xf", archive_s, "-C", work_s])
+        .status()
+        .map_err(|e| format!("could not run tar: {e}"))?;
+    if !status.success() {
+        return Err("tar failed to extract the archive".into());
+    }
+
+    let new_cterm = work.join(bin_name("cterm"));
+    if !new_cterm.exists() {
+        return Err("extracted archive did not contain cterm".into());
+    }
+
+    // Replace the sibling daemon/web binaries first (plain copies; they are not
+    // the running process). Then atomically replace this running binary.
+    if let Some(dir) = exe.parent() {
+        for b in ["cterm-daemon", "cterm-web"] {
+            let src = work.join(bin_name(b));
+            if !src.exists() {
+                continue;
+            }
+            let dst = dir.join(bin_name(b));
+            if let Err(e) = std::fs::copy(&src, &dst) {
+                eprintln!(
+                    "cterm: warning: could not update {} ({e}); stop it if running and copy manually.",
+                    dst.display()
+                );
+            }
+        }
+    }
+
+    self_replace::self_replace(&new_cterm).map_err(|e| format!("replacing the running binary: {e}"))
 }
 
 /// `cterm doctor` — read-only self-diagnosis of the whole install.
