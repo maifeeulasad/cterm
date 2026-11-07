@@ -42,6 +42,16 @@
   .row.sel { background: var(--sel); }
   .row .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
   .row .title { font-weight: 600; word-break: break-all; }
+  .row .meta .label {
+    display: inline-block;
+    padding: 1px 6px;
+    margin-right: 4px;
+    border-radius: 3px;
+    background: #eef2ff;
+    color: #3730a3;
+    font-family: ui-monospace, Menlo, Consolas, monospace;
+    font-size: 11px;
+  }
   .row .meta { color: var(--muted); font-size: 12px; margin-top: 2px; }
   .badge {
     display: inline-block; font-size: 11px; padding: 1px 7px; border-radius: 999px;
@@ -99,6 +109,11 @@ async function api(path) {
   return r.json();
 }
 const shortId = (id) => { const u = String(id).split("-").slice(1).join("-") || id; return u.slice(0, 8); };
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, (c) => (
+    { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]
+  ));
+}
 const kindOf = (status) => (status && status.kind) ? status.kind : "pending";
 function statusLabel(status) {
   const k = kindOf(status);
@@ -120,9 +135,19 @@ async function loadSessions() {
     for (const s of sessions) {
       const div = document.createElement("div");
       div.className = "row" + (state.session === s.id ? " sel" : "");
-      div.innerHTML = `<div class="title mono">${shortId(s.id)}</div>
-        <div class="meta">${s.host?.name ?? "?"} · ${s.shell} · ${s.status}</div>
-        <div class="meta">${s.opened_at ?? ""}</div>`;
+      const titleHtml = s.title
+        ? `<div class="title">${esc(s.title)}</div>
+           <div class="meta mono">${esc(shortId(s.id))}</div>`
+        : `<div class="title mono">${esc(shortId(s.id))}</div>`;
+      const labelsHtml = s.labels && Object.keys(s.labels).length
+        ? `<div class="meta">${Object.entries(s.labels)
+            .map(([k, v]) => `<span class="label">${esc(k)}=${esc(String(v))}</span>`)
+            .join(" ")}</div>`
+        : "";
+      div.innerHTML = `${titleHtml}
+        <div class="meta">${esc(s.host?.name ?? "?")} · ${esc(s.shell ?? "")} · ${esc(String(s.status ?? ""))}</div>
+        ${labelsHtml}
+        <div class="meta">${esc(s.opened_at ?? "")}</div>`;
       div.onclick = () => selectSession(s.id);
       list.appendChild(div);
     }
