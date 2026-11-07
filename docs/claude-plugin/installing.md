@@ -20,6 +20,23 @@ cterm service enable
 See the [top-level README](../../README.md) for Windows/macOS commands and
 alternative install methods.
 
+### Optional: opt-in daemon auth (0.6.0+)
+
+If you're on a multi-user host or a container host where another UID or
+container can reach `127.0.0.1:50051`, turn on bearer-token auth before
+running the plugin so the daemon rejects anything that isn't your Claude
+client:
+
+```bash
+cterm auth enable                     # stores a fresh token in the OS keyring
+CTERM_AUTH=on cterm-daemon            # or add CTERM_AUTH=on to the service unit
+```
+
+The plugin's commands then pick the token up automatically from the
+keyring (or `CTERM_AUTH_TOKEN` on headless hosts). Full flow in
+[docs/auth.md](../auth.md). Skip this on a single-user developer box —
+the default (open on loopback) is fine there.
+
 ## 1. Claude Code — from this GitHub repository
 
 In an interactive `claude` session:
@@ -69,6 +86,10 @@ In any Claude surface, type `/` and look for `cterm:` entries (`exec`,
 /cterm:sessions
 ```
 
-should print the daemon's session list. If it errors with a connect
-failure, the daemon isn't running — `cterm service status` and
-`cterm doctor` diagnose the install.
+should print the daemon's session list. If it errors:
+
+- **Connect failure**: the daemon isn't running — `cterm service status`
+  and `cterm doctor` diagnose the install.
+- **`UNAUTHENTICATED`**: the daemon has 0.6.0 auth on but this client
+  doesn't have the token. `cterm auth status` confirms; `cterm auth
+  enable` (or set `CTERM_AUTH_TOKEN`) wires one up.

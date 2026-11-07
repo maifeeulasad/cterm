@@ -5,7 +5,7 @@ one skill and three slash commands, namespaced under `cterm:`.
 
 ## The commands
 
-### `/cterm:exec <command>`
+### `/cterm:exec [--id <id>] [--title <t>] [--label k=v]… <command>`
 
 Runs `<command>` through the daemon and streams its output back into the
 conversation. Equivalent to `cterm execute --json "$ARGUMENTS"` on the host.
@@ -17,6 +17,16 @@ conversation. Equivalent to `cterm execute --json "$ARGUMENTS"` on the host.
   the same way it reads a `Bash` exit code.
 - To attach to an existing session instead of opening a new one, invoke the
   command with `--id <session-id>` in the arguments.
+- To **name** a new session so the user can find it later in `cterm-web`:
+  pass `--title "one-line description"` and optionally one or more
+  `--label key=value` tags. Both are open-time only (rejected when
+  combined with `--id`). Rules: title <= 256 bytes, no newlines/ANSI;
+  labels <= 32, key/value each <= 128 bytes, no control characters,
+  `=` banned in keys. See [docs/session-metadata.md](../session-metadata.md)
+  for the full rules.
+- If the daemon has 0.6.0 bearer-token auth turned on, `cterm execute`
+  picks the token up from `CTERM_AUTH_TOKEN` or the OS keyring; nothing
+  to pass through the slash command.
 
 ### `/cterm:sessions`
 
@@ -36,7 +46,7 @@ interrupting them.
 ## The skill
 
 `cterm-skill` loads whenever a task matches *"run a shell command the user
-will want recorded or want me to observe later"*. It does two things:
+will want recorded or want me to observe later"*. It does four things:
 
 1. **Nudges Claude to prefer `cterm execute` over `Bash`** when a cterm
    daemon is reachable. Rule of thumb in the skill: if `cterm status`
@@ -44,6 +54,13 @@ will want recorded or want me to observe later"*. It does two things:
    goes through the daemon.
 2. **Captures the session id** after the first `/cterm:exec` so follow-up
    commands can reuse `--id` instead of opening a new session per call.
+3. **Names new sessions** with `--title` / `--label` when the task is
+   user-visible (a build, a deploy, a data job). Doesn't invent noisy
+   tags — only well-known keys like `env`, `ticket`, `pr`, `service`,
+   `commit`.
+4. **Surfaces auth and validation rejections cleanly** instead of
+   retrying — on `UNAUTHENTICATED` it points at `cterm auth status`;
+   on `InvalidArgument` for bad metadata it relays the daemon's reason.
 
 The skill is written so it loses gracefully — if the daemon is down or
 cterm isn't installed, it says so and falls back to regular `Bash`. It

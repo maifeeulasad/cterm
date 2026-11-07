@@ -1,12 +1,13 @@
 # Daemon authentication (opt-in)
 
-As of **0.5.x the daemon is open** on `127.0.0.1:50051` — any local
-process can call `Terminal.Run`, `ListSessions`, `SendInput`, etc. For
+Before 0.6.0 the daemon was open on `127.0.0.1:50051` — any local process
+could call `Terminal.Run`, `ListSessions`, `SendInput`, etc. For
 single-user developer machines on a trusted host, that matches the threat
-model (the human already controls the host and the credentials).
+model (the human already controls the host and the credentials), so
+**the default is still open** in 0.6.0+ for backward compatibility.
 
-**0.6.0 adds opt-in bearer-token auth.** This document is how to turn it
-on. [Issue #27](https://github.com/maifeeulasad/cterm/issues/27) tracks
+**0.6.0 added opt-in bearer-token auth.** This document is how to turn it
+on. [Issue #27](https://github.com/maifeeulasad/cterm/issues/27) tracked
 the design.
 
 ## When to turn it on

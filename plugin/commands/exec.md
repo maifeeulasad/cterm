@@ -1,6 +1,6 @@
 ---
 description: "Run a shell command through the local cterm daemon so it is recorded, streamable, and replayable."
-argument-hint: "[--id <session-id>] <command>"
+argument-hint: "[--id <session-id>] [--title <t>] [--label k=v] <command>"
 ---
 
 The user asked you to run a shell command through the cterm daemon. Do
@@ -15,8 +15,15 @@ cterm execute --json $ARGUMENTS
 ```
 
 `$ARGUMENTS` is already the user's raw argument string. It already contains
-either `<command>` or `--id <session-id> <command>`; do not re-quote it or
-try to pre-parse the flags.
+the command and any of these flags; do not re-quote it or try to pre-parse:
+
+- `--id <session-id>` — attach to an existing session instead of opening
+  a new one.
+- `--title "<one-line>"` — title for a new session (only on open; <= 256
+  bytes, no newlines). Shown in `cterm-web`.
+- `--label key=value` — one key/value tag for a new session (repeatable;
+  <= 32 total, key/value each <= 128 bytes). Shown as inline chips in
+  `cterm-web`.
 
 Interpret the output as NDJSON:
 
@@ -31,6 +38,12 @@ Interpret the output as NDJSON:
   the user in plain language: "exited with code 0", or "interrupted by
   signal 2", etc. Don't rephrase a non-zero exit as a success.
 
-If `cterm execute` fails to connect, tell the user "the cterm daemon isn't
-reachable at `$CTERM_ADDR`" and suggest `cterm doctor` — do **not**
-silently fall back to `Bash`. The user picked this command on purpose.
+**On error:**
+
+- Connect failure → "the cterm daemon isn't reachable at `$CTERM_ADDR`",
+  suggest `cterm doctor`. Do **not** silently fall back to `Bash`.
+- `UNAUTHENTICATED` → the operator turned on auth but the token isn't
+  wired on the client. Point them at `cterm auth status` /
+  `cterm auth enable` and `docs/auth.md`. Don't retry blindly.
+- `InvalidArgument` with a message about title/labels → relay it; the
+  daemon rejected metadata that violated the limits.

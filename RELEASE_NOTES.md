@@ -1,10 +1,32 @@
-# cterm v0.6.0
+# cterm v0.6.1
 
 A terminal integration / shim tool that lets agents observe, record, stream, and
 drive shell command executions **without ever holding the credentials used to
 open the session**.
 
 > Early release. Tri-platform; shared for feedback. Expect rough edges.
+
+## 0.6.1 — Claude plugin + docs refresh for 0.6.0 features
+
+Docs-only patch. No daemon, CLI, or wire-format changes. Bumps the plugin
+manifest too so the Anthropic directory re-scans the plugin and users on
+0.6.0 pick up the updated skill + command content.
+
+- **Claude plugin** (`plugin/`) now teaches Claude about 0.6.0:
+  - `commands/exec.md` advertises `--title` / `--label K=V` passthrough on
+    new sessions, with the open-time-only constraint.
+  - `commands/sessions.md` mentions that titles/labels surface in
+    `cterm-web` and `ListSessions`.
+  - `skills/cterm/SKILL.md` gets a "Naming a session" section (which
+    keys to reach for, which to avoid), and a "When the daemon rejects
+    the call" section covering `UNAUTHENTICATED` (auth on, no token) and
+    `InvalidArgument` (metadata rejected).
+- **Install/usage docs** (`docs/claude-plugin/`) catch up: an "Optional:
+  opt-in daemon auth" section in `installing.md`, verifying-the-install
+  error cases split between connect failures and `UNAUTHENTICATED`,
+  usage.md documents the new flags and the four things the skill does.
+- **`docs/auth.md`**: tense fix now that 0.6.0 has shipped — makes clear
+  that the default is still open (backward compat) and auth is opt-in.
 
 ## 0.6.0 — opt-in auth + session metadata
 

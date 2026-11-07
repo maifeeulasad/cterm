@@ -23,7 +23,8 @@ session and its executions.
 
 If you have a prior session id from an earlier `/cterm:exec` this turn,
 include it in the summary so the user knows which one Claude is currently
-attached to.
+attached to — along with any `--title` / `--label` you attached when it
+was opened; both now surface in `cterm-web` and in `ListSessions`.
 
 Keep the response one short paragraph — this command is a shortcut, not a
 full dashboard.
