@@ -118,6 +118,19 @@ same gRPC API. Browse records with `cterm-web` (`http://127.0.0.1:8088`).
 gRPC addr), `CTERM_SOCK` (shim↔daemon IPC socket/pipe), `CTERM_WEB_ADDR`
 (cterm-web addr), `CTERM_FORCE_RECORD` (record non-interactive shim calls too).
 
+## Session metadata
+
+Sessions can carry an optional one-line `title` and a small map of `labels`
+(`env=prod`, `ticket=ABC-123`, …) set at open time:
+
+```bash
+cterm execute --title "deploy webapp" --label env=staging \
+  'kubectl apply -f manifest.yaml'
+```
+
+Both show in the `cterm-web` session list. Full rules and limits in
+[docs/session-metadata.md](docs/session-metadata.md).
+
 ## Claude plugin
 
 cterm ships as a [Claude plugin](docs/claude-plugin/README.md) in [plugin/](plugin/),

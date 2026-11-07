@@ -303,8 +303,9 @@ mod tests {
         assert!(validate_labels(huge).is_err());
 
         // too many
-        let many: BTreeMap<_, _> =
-            (0..=MAX_LABELS as u32).map(|i| (format!("k{i}"), "v".into())).collect();
+        let many: BTreeMap<_, _> = (0..=MAX_LABELS as u32)
+            .map(|i| (format!("k{i}"), "v".into()))
+            .collect();
         assert!(validate_labels(many).is_err());
     }
 }

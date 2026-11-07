@@ -98,8 +98,7 @@ fn parse(args: &[String]) -> CliResult<ExecuteArgs> {
     let mut quiet = false;
     let mut command: Option<String> = None;
     let mut title = String::new();
-    let mut labels: std::collections::HashMap<String, String> =
-        std::collections::HashMap::new();
+    let mut labels: std::collections::HashMap<String, String> = std::collections::HashMap::new();
 
     let mut it = args.iter();
     while let Some(a) = it.next() {
