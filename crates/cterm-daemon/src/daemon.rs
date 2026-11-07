@@ -187,7 +187,20 @@ impl<S: RecordStore + Send + Sync + 'static> Daemon<S> {
             } else {
                 &req.program
             };
-            let session = Session::open(Host::local(), shell);
+
+            // Validate caller-supplied metadata before it reaches storage, so
+            // bad input is rejected with a clear InvalidArgument at the gRPC
+            // boundary rather than silently truncated or stored as-is.
+            let mut session = Session::open(Host::local(), shell);
+            if !req.title.is_empty() {
+                session.title = cterm_core::validate_title(&req.title)?;
+            }
+            if !req.labels.is_empty() {
+                let labels: std::collections::BTreeMap<String, String> =
+                    req.labels.clone().into_iter().collect();
+                session.labels = cterm_core::validate_labels(labels)?;
+            }
+
             self.store.put_session(&session).await?;
             Ok(session.id)
         } else {
