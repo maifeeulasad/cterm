@@ -55,13 +55,52 @@ same way you would a plain `Bash` exit.
   enable`, and fall back to `Bash` *only if the user confirms* they want
   the run to go through unrecorded.
 
+## Naming a session (0.6.0+)
+
+When you're opening a fresh session for a user-visible task — a build,
+a deploy, a data job that the user may want to find in `cterm-web`
+later — attach a one-line title and, if the context gives you obvious
+tags, a couple of labels:
+
+```bash
+cterm execute --json --title "deploy webapp to staging" \
+  --label env=staging --label ticket=ABC-123 \
+  "kubectl apply -f manifest.yaml"
+```
+
+Rules of thumb:
+
+- **Title**: one short imperative noun phrase. Not the raw command (the
+  command is already recorded). `<= 256` bytes, no newlines/ANSI. Skip
+  it for one-off probes.
+- **Labels**: only when they'd help the user grep later. Good keys to
+  reach for: `env`, `ticket`, `pr`, `service`, `commit`. Don't invent
+  nebulous tags — "status=running" is noise; the session status is
+  already tracked.
+- **Open-time only**: `--title` and `--label` apply only when `--id` is
+  absent. On `--id`, drop them and the daemon will reject the call
+  anyway.
+
 ## State to track across a turn
 
 After the first `/cterm:exec` in a turn, pin the `session` id you saw in
 the `started` event. Pass `--id <session>` on every subsequent cterm run
 in the same turn so the user doesn't accumulate one disposable session
 per command. A reasonable default is "stay in one session until the user
-asks for a new shell".
+asks for a new shell". When reusing a session via `--id`, don't repeat
+`--title` / `--label`.
+
+## When the daemon rejects the call (0.6.0+)
+
+- **`Unauthenticated`**: the operator turned on auth but the token isn't
+  wired on this client. Tell them, point at `cterm auth status` and
+  `cterm auth enable` (and `docs/auth.md` for the full flow). Do not
+  keep retrying — the daemon will keep rejecting until a token lands in
+  `CTERM_AUTH_TOKEN` or the OS keyring.
+- **`InvalidArgument`** with a message mentioning title/labels: the
+  daemon rejected your metadata (too long, control chars, `=` in a
+  label key, too many labels). Relay the message, don't quietly strip
+  the field.
 
 ## How to check whether cterm is usable
 
@@ -84,6 +123,9 @@ to patch around it.
   for commands whose output you don't need to show the user.
 - `--id <session>` — attach to an existing session instead of opening a
   new one.
+- `--title "<text>"` — one-line title for a new session (open-time only).
+- `--label key=value` — attach a tag to a new session (repeatable,
+  open-time only).
 - `--addr <url>` — point at a non-default daemon (defaults to
   `$CTERM_ADDR` or `http://127.0.0.1:50051`).
 - `--cwd <path>` — working directory on the host.
