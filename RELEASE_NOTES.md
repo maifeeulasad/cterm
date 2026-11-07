@@ -1,10 +1,36 @@
-# cterm v0.5.0
+# cterm v0.5.1
 
 A terminal integration / shim tool that lets agents observe, record, stream, and
 drive shell command executions **without ever holding the credentials used to
 open the session**.
 
 > Early release. Tri-platform; shared for feedback. Expect rough edges.
+
+## 0.5.1 — directory-review fixes for the Claude plugin
+
+Patch release to unblock the Anthropic plugin-directory submission started
+in 0.5.0 ([#21](https://github.com/maifeeulasad/cterm/issues/21)). No
+daemon, CLI, or wire-format changes.
+
+- **Drop `allowed-tools` frontmatter from the three slash commands.** The
+  directory refused the 0.5.0 submission with: *"`allowed-tools` entries
+  beyond Read/Grep/Glob/LS accepted only from Verified organizations. If
+  your organization isn't Verified, remove them from the plugin."* Our
+  org isn't Verified. Removing the frontmatter means Claude Code now
+  prompts the user the first time each `/cterm:*` command calls `cterm`
+  — a one-time approval, same as any other Bash call.
+- **Quote the `description` / `argument-hint` values** in the command
+  frontmatter so they stop tripping the "may be misread" YAML lint. An
+  `argument-hint` that started with `[` was being parsed as a YAML flow
+  sequence.
+- **Ship a listing icon**: `plugin/.claude-plugin/icon.png` (1024×1024
+  PNG converted from `assets/cterm.webp` — the portal rejects WebP/SVG).
+  Referenced from `plugin.json`. The portal warns the listing icon may be
+  locked on first submit, so this may not take effect on the current
+  review, but it is in place for any resubmission and for local installs.
+- **gitignore the SQLite WAL companion files** (`cterm.db-shm`,
+  `cterm.db-wal`) so a daemon run at the repo root no longer leaves
+  untracked files.
 
 ## 0.5.0 — cterm as a Claude plugin
 
