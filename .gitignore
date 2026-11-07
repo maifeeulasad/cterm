@@ -23,3 +23,7 @@ Thumbs.db
 
 # Vendored reference sources (studied, not built/committed)
 /vendor/
+
+# Dev related files overhead
+cterm.db-shm
+cterm.db-wal
