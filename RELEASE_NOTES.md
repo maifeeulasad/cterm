@@ -1,10 +1,43 @@
-# cterm v0.4.1
+# cterm v0.5.0
 
 A terminal integration / shim tool that lets agents observe, record, stream, and
 drive shell command executions **without ever holding the credentials used to
 open the session**.
 
 > Early release. Tri-platform; shared for feedback. Expect rough edges.
+
+## 0.5.0 — cterm as a Claude plugin
+
+cterm now ships as a [Claude plugin](docs/claude-plugin/README.md)
+([#21](https://github.com/maifeeulasad/cterm/issues/21)). Install it into
+Claude Code with `/plugin marketplace add maifeeulasad/cterm`, or upload the
+zipped [plugin/](plugin/) folder in claude.ai > Customize > Plugins > Add >
+Upload plugin. Three slash commands and a skill come with it:
+
+- **`/cterm:exec [--id <session>] <command>`** — run through the daemon
+  with full NDJSON event streaming. The command's own exit code propagates
+  into the agent's tool output.
+- **`/cterm:sessions`** — the daemon's session list, with a shortcut to
+  `cterm-web` for the full catalog.
+- **`/cterm:tail <execution-id>`** — replay-plus-tail of a stored
+  execution; points at `cterm-web` while a native `cterm tail` subcommand
+  is still on the follow-up pile.
+- **`cterm-skill`** — teaches Claude when to prefer `cterm execute` over
+  the raw Bash tool (long builds, deploys, anything auditable) and when
+  not to (small reads, full-screen TUIs, daemon unreachable), and to stay
+  in one session across a turn via `--id`.
+
+The plugin ships no binaries of its own — every command wraps the
+`cterm execute` CLI that landed in 0.4.1, so a user who already has
+cterm installed gets the full plugin surface without any new code on
+their machine. Prerequisites and three install paths (Claude Code, zip
+upload, directory submission) are in
+[docs/claude-plugin/installing.md](docs/claude-plugin/installing.md).
+
+Directory submission is tracked in
+[docs/claude-plugin/submission.md](docs/claude-plugin/submission.md) and
+stays open for a plan upgrade before the first submit; the plugin is
+usable today from the repo as a Claude Code marketplace.
 
 ## 0.4.1 — tool-callable CLI over gRPC
 
