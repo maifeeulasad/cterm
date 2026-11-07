@@ -18,7 +18,9 @@ use std::io::{self, Write};
 
 use cterm_proto::v1;
 use cterm_proto::TerminalClient;
+use tonic::metadata::MetadataValue;
 
+use crate::auth::{self, SystemKeyring};
 use crate::error::{CliError, CliResult};
 
 fn msg(s: impl Into<String>) -> CliError {
@@ -160,9 +162,30 @@ fn parse_u32(flag: &str, raw: &str) -> CliResult<u32> {
 }
 
 async fn execute(args: ExecuteArgs) -> CliResult<i32> {
-    let mut client = TerminalClient::connect(args.addr.clone())
+    let channel = tonic::transport::Endpoint::from_shared(args.addr.clone())
+        .map_err(|e| msg(format!("addr {}: {e}", args.addr)))?
+        .connect()
         .await
         .map_err(|e| msg(format!("connect {}: {e}", args.addr)))?;
+
+    // If the operator has set up auth (env or keyring), attach a bearer
+    // header on every request via an interceptor. With no token configured,
+    // the interceptor is a no-op and the client stays identical to pre-0.6.0.
+    let header: Option<MetadataValue<_>> = match auth::resolve_token(&SystemKeyring) {
+        Some(t) => Some(
+            format!("Bearer {t}")
+                .parse()
+                .map_err(|e| msg(format!("bearer token is not a valid header: {e}")))?,
+        ),
+        None => None,
+    };
+    let mut client =
+        TerminalClient::with_interceptor(channel, move |mut req: tonic::Request<()>| {
+            if let Some(h) = header.clone() {
+                req.metadata_mut().insert("authorization", h);
+            }
+            Ok(req)
+        });
 
     let request = v1::RunRequest {
         session: args.session.clone(),

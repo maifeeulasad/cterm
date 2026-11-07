@@ -9,6 +9,7 @@
 // unavoidable SetConsoleMode FFI; everything else stays unsafe-free.
 #![deny(unsafe_code)]
 
+mod auth;
 mod commands;
 mod config;
 mod error;
@@ -50,6 +51,7 @@ fn cli(args: &[String]) -> i32 {
         Some("doctor") => selfcmd::doctor(&layout_or_die()),
         Some("link") => cmd_link(&args[1..]),
         Some("execute") | Some("exec") => execute::run(&args[1..]),
+        Some("auth") => cmd_auth(&args[1..]),
         Some("update") | Some("upgrade") => cmd_update(&args[1..]),
         Some("-h") | Some("--help") | Some("help") | None => {
             // Help goes to stdout so it can be captured by scripts/agents.
@@ -205,6 +207,102 @@ fn cmd_link(args: &[String]) -> i32 {
     selfcmd::link(scope)
 }
 
+fn cmd_auth(args: &[String]) -> i32 {
+    let sub = args.first().map(String::as_str);
+    let rest = if args.is_empty() { &[][..] } else { &args[1..] };
+    let store = auth::SystemKeyring;
+    match sub {
+        Some("enable") => {
+            let (mut token, mut print) = (None, false);
+            let mut it = rest.iter();
+            while let Some(a) = it.next() {
+                match a.as_str() {
+                    "--token" => {
+                        let Some(v) = it.next() else {
+                            eprintln!("cterm: auth enable: --token needs a value");
+                            return 2;
+                        };
+                        token = Some(v.clone());
+                    }
+                    "--print" => print = true,
+                    other => {
+                        eprintln!("cterm: auth enable: unknown flag '{other}'");
+                        return 2;
+                    }
+                }
+            }
+            match auth::enable(&store, token, print) {
+                Ok(t) => {
+                    if !print {
+                        println!(
+                            "cterm auth: stored token in {} keyring (fingerprint: {})",
+                            auth::SERVICE,
+                            &t[..8.min(t.len())]
+                        );
+                    }
+                    println!("Restart cterm-daemon with CTERM_AUTH=on to enforce it.");
+                    0
+                }
+                Err(e) => {
+                    eprintln!("cterm: {e}");
+                    1
+                }
+            }
+        }
+        Some("disable") => match auth::disable(&store) {
+            Ok(()) => {
+                println!("cterm auth: cleared token from keyring");
+                println!("Restart cterm-daemon (without CTERM_AUTH=on and without CTERM_AUTH_TOKEN) to drop back to open mode.");
+                0
+            }
+            Err(e) => {
+                eprintln!("cterm: {e}");
+                1
+            }
+        },
+        Some("rotate") => {
+            let print = rest.iter().any(|a| a == "--print");
+            match auth::rotate(&store, print) {
+                Ok(t) => {
+                    if !print {
+                        println!(
+                            "cterm auth: rotated token (fingerprint: {})",
+                            &t[..8.min(t.len())]
+                        );
+                    }
+                    println!("Restart cterm-daemon so the new token takes effect.");
+                    0
+                }
+                Err(e) => {
+                    eprintln!("cterm: {e}");
+                    1
+                }
+            }
+        }
+        Some("status") => {
+            let st = auth::status(&store);
+            if st.has_token {
+                let source = match st.source {
+                    Some(auth::AuthSource::Env) => "env (CTERM_AUTH_TOKEN)",
+                    Some(auth::AuthSource::Keyring) => "keyring",
+                    None => "none",
+                };
+                println!(
+                    "cterm auth: token present (source: {source}, fingerprint: {})",
+                    st.fingerprint.unwrap_or_default()
+                );
+            } else {
+                println!("cterm auth: no token (client will connect unauthenticated)");
+            }
+            0
+        }
+        _ => {
+            eprintln!("usage: cterm auth <enable|disable|rotate|status> [--token <t>] [--print]");
+            2
+        }
+    }
+}
+
 fn cmd_service(args: &[String]) -> i32 {
     let layout = layout_or_die();
     let result = match args.first().map(String::as_str) {
@@ -269,6 +367,12 @@ COMMANDS:
         output. Exits with the command's own exit code. Agent-friendly front
         door over the Terminal.Run RPC — no tonic/grpcurl/protoc needed on
         the client side. `cterm execute --help` for all flags.
+    auth <enable|disable|rotate|status> [--token <t>] [--print]
+        Opt-in bearer-token auth for the daemon's gRPC. Tokens live in the
+        OS keyring (macOS Keychain / Windows Credential Manager / Linux
+        Secret Service). Env var CTERM_AUTH_TOKEN overrides the keyring on
+        both daemon and client. Daemon must be restarted with CTERM_AUTH=on
+        (or CTERM_AUTH_TOKEN set) for enforcement to kick in.
     doctor                        Diagnose the install (version/update, binaries,
                                   shims, PATH, records db, daemon, autostart).
     -h, --help                    Show this help (on stdout).
