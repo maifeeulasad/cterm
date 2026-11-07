@@ -99,7 +99,9 @@ CTERM_AUTH_TOKEN="$(cat token-file)" cterm-daemon
 
 If you use `cterm service enable` to run the daemon under systemd /
 launchd / Windows Startup, add `CTERM_AUTH=on` to the service unit's
-environment so it survives reboots.
+environment so it survives reboots. The service bounce dance (needed
+whenever you rotate the token, or any time the daemon binary changes) is
+the same stop → restart pattern documented in [docs/updating.md](updating.md).
 
 ### 3. Verify
 

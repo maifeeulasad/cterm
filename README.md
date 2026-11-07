@@ -178,6 +178,15 @@ Autostart (daemon on login): `cterm service enable` — systemd `--user` on Linu
 a launchd LaunchAgent on macOS, a per-user Startup entry on Windows; undo with
 `cterm service disable`.
 
+## Updating
+
+`cterm update` fetches the latest release into `~/.cterm/bin/`. It is
+intentionally **not** a one-touch upgrade: it does not touch the copies
+`cterm link` placed on `PATH`, and it does not bounce the services, so a
+long-running recording isn't cut off and a hand-built binary at
+`~/.local/bin/` isn't quietly replaced. The full flow (stop, sync, start)
+is in [docs/updating.md](docs/updating.md).
+
 ## Acknowledgements
 
 The Windows host-console raw mode (`cterm-cli`'s `win_console`) adapts the

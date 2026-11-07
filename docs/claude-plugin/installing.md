@@ -11,14 +11,25 @@ and the SKILL expects `cterm status` / `cterm-daemon` to be available.
 ```bash
 # 1. Install cterm (prebuilt release, any platform)
 curl -L https://github.com/maifeeulasad/cterm/releases/latest/download/cterm-x86_64-linux.tar.gz | tar -xz
-# 2. Put the three binaries on PATH (symlinks on Unix, copies on Windows)
+# 2. Put the three binaries on PATH (symlinks on Unix into ~/.cterm/bin/, copies on Windows)
 ./cterm link --user
 # 3. Start the daemon on login (systemd --user / launchd / Windows Startup)
 cterm service enable
 ```
 
-See the [top-level README](../../README.md) for Windows/macOS commands and
-alternative install methods.
+Per-platform download links are on the [top-level README](../../README.md#)
+(Windows ZIP, Linux tarball, macOS Apple Silicon + Intel tarballs). Once
+unpacked, `cterm link --user` + `cterm service enable` are the same on
+every platform — the only difference is the autostart mechanism cterm
+sets up (systemd user unit on Linux, launchd LaunchAgent on macOS,
+Startup entry on Windows).
+
+If you later run `cterm update`, remember it rewrites only
+`~/.cterm/bin/` — the services and the `cterm` on PATH keep running the
+old binary until you sync and restart. The full rollout flow is in
+[docs/updating.md](../updating.md); for the Claude plugin the visible
+symptom is a stale UI at `http://localhost:8088/` until `cterm-web` is
+restarted from the fresh binary.
 
 ### Optional: opt-in daemon auth (0.6.0+)
 
