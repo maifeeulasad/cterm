@@ -35,8 +35,12 @@ async fn start_protected(verifier: Verifier) -> String {
 async fn bearer_client(
     url: String,
     token: &str,
-) -> TerminalClient<tonic::codegen::InterceptedService<tonic::transport::Channel, impl tonic::service::Interceptor + Clone>>
-{
+) -> TerminalClient<
+    tonic::codegen::InterceptedService<
+        tonic::transport::Channel,
+        impl tonic::service::Interceptor + Clone,
+    >,
+> {
     let channel = tonic::transport::Endpoint::from_shared(url)
         .unwrap()
         .connect()

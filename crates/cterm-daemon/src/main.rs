@@ -6,7 +6,7 @@
 //!   * `CTERM_DB`         — SQLite database path (default `cterm.db`).
 //!   * `CTERM_AUTH_TOKEN` — if set, require this bearer token on every RPC.
 //!   * `CTERM_AUTH=on`    — enable auth and read the token from the OS keyring
-//!                          (the shim/CLI stashes it there via `cterm auth`).
+//!     (the shim/CLI stashes it there via `cterm auth`).
 
 use std::net::SocketAddr;
 use std::sync::Arc;

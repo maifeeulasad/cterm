@@ -297,9 +297,7 @@ fn cmd_auth(args: &[String]) -> i32 {
             0
         }
         _ => {
-            eprintln!(
-                "usage: cterm auth <enable|disable|rotate|status> [--token <t>] [--print]"
-            );
+            eprintln!("usage: cterm auth <enable|disable|rotate|status> [--token <t>] [--print]");
             2
         }
     }

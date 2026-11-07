@@ -94,9 +94,7 @@ fn keyring_err(e: keyring::Error) -> CliError {
 #[cfg(test)]
 #[derive(Default, Clone)]
 pub struct MemoryKeyStore {
-    inner: std::sync::Arc<
-        std::sync::Mutex<std::collections::HashMap<(String, String), String>>,
-    >,
+    inner: std::sync::Arc<std::sync::Mutex<std::collections::HashMap<(String, String), String>>>,
 }
 
 #[cfg(test)]
@@ -323,7 +321,9 @@ mod tests {
     fn temp_env(key: &str, value: Option<&str>, body: impl FnOnce()) {
         use std::sync::Mutex;
         static LOCK: Mutex<()> = Mutex::new(());
-        let _g = LOCK.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let _g = LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let prior = std::env::var(key).ok();
         match value {
             Some(v) => std::env::set_var(key, v),

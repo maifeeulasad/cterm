@@ -1,10 +1,69 @@
-# cterm v0.5.2
+# cterm v0.6.0
 
 A terminal integration / shim tool that lets agents observe, record, stream, and
 drive shell command executions **without ever holding the credentials used to
 open the session**.
 
 > Early release. Tri-platform; shared for feedback. Expect rough edges.
+
+## 0.6.0 — opt-in bearer-token auth for the daemon
+
+**Security release.** The gRPC `Terminal` service can now require a bearer
+token on every RPC ([#27](https://github.com/maifeeulasad/cterm/issues/27)).
+Default behavior is unchanged — single-user developer machines keep the
+open-on-loopback model — but multi-user hosts, containers, CI runners, and
+defense-in-depth setups can flip it on with two commands:
+
+```bash
+cterm auth enable            # stores a fresh token in the OS keyring
+CTERM_AUTH=on cterm-daemon   # enforces it on every RPC
+```
+
+Full flow, token precedence, rotation, and the `CTERM_AUTH_TOKEN` escape
+hatch for headless hosts are in [docs/auth.md](docs/auth.md).
+
+### What's new
+
+- **`cterm-core::AuthVerifier`** — a port the daemon calls on every RPC
+  without knowing how the credential was issued or stored. `NoopVerifier`
+  is the default and preserves today's behavior.
+- **`cterm-daemon::TokenVerifier`** — constant-time bearer-token compare
+  (byte-level fold so neither length nor prefix match leak via timing).
+- **`cterm-daemon::AuthInterceptor`** — tonic interceptor that pulls
+  `authorization: Bearer <t>` from metadata; wired via
+  `InterceptedService` so no service method can skip the check.
+- **`cterm-daemon::verifier_from_env`** — the env-driven factory:
+  `CTERM_AUTH_TOKEN=<secret>` (first), `CTERM_AUTH=on` + keyring token
+  (second), then `NoopVerifier`. The daemon startup banner now prints
+  `auth=on` / `auth=off` so operators can see the state at a glance.
+- **`cterm-cli::auth::KeyStore`** — trait abstracted over the OS keyring.
+  The shipped `SystemKeyring` impl uses the
+  [`keyring`](https://crates.io/crates/keyring) 3.x crate (macOS
+  Keychain, Windows Credential Manager, Linux Secret Service). Tokens
+  live under `(service = "cterm", user = "daemon-token")`.
+- **`cterm auth` subcommand group** — `enable`, `disable`, `rotate`,
+  `status`. `enable --print` / `rotate --print` echo the token once so
+  operators on keyring-less hosts can paste it into `CTERM_AUTH_TOKEN`.
+  `status` reports only a short fingerprint (first 8 chars), never the
+  secret.
+- **`cterm execute`** now attaches the bearer header on every RPC when a
+  token is available (env > keyring > none); unchanged when nothing is
+  configured.
+
+### What's not covered
+
+Per-client identities, audit of who presented the token, TLS/mTLS, and
+hardware-backed credentials are all explicitly out of scope — the
+expected deployment is loopback-only. If you need any of these, open an
+issue on [#27](https://github.com/maifeeulasad/cterm/issues/27).
+
+### Compatibility
+
+No wire-format or Cargo-API breaking changes. Existing clients continue
+to work against a default (open) daemon, and an existing open daemon
+continues to work with upgraded clients. The new `terminal_server_with_auth`
+factory is additive; the previous `terminal_server` factory still exists
+for callers (and tests) that explicitly want no auth.
 
 ## 0.5.2 — plugin listing: privacy policy + terms of service
 
