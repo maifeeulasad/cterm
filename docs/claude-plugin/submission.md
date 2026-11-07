@@ -5,14 +5,37 @@ Tracks the public-directory listing for the cterm plugin.
 
 ## Status
 
-| Stage                         | Status      | Notes                                              |
-| ----------------------------- | ----------- | -------------------------------------------------- |
-| Plugin shipped in-tree         | **done**    | 0.5.0: `plugin/` validates with `claude plugin validate`. |
-| Repository public              | done        | `github.com/maifeeulasad/cterm` is already public. |
-| Submitted at `claude.ai/directory/manage` | **pending** | Needs a Max/Team/Enterprise plan to submit. |
-| Automated validation + scan    | pending     | Runs on submission.                                |
-| Human review                   | pending     | Required for a first listing.                      |
-| Listed                         | pending     | Appears under Discover after review clears.        |
+| Stage                                     | Status       | Notes                                                                                                                                                 |
+| ----------------------------------------- | ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Plugin shipped in-tree                    | **done**     | 0.5.0: `plugin/` validates with `claude plugin validate`.                                                                                             |
+| Repository public                         | done         | `github.com/maifeeulasad/cterm` is already public.                                                                                                    |
+| Submitted at `claude.ai/directory/manage` | **done**     | 0.5.0 submitted against commit `a51f027`; tracked branch `main`, plugin path `plugin`.                                                                |
+| GitHub push webhook                       | **done**     | Configured so future `main` pushes that touch `plugin/` are picked up within minutes rather than the 6-hour poll.                                     |
+| Auto-publish passing versions             | **enabled**  | Later versions that pass checks go live without a human click. First version still needs a human publish.                                             |
+| Automated validation + scan               | **done**     | Passed with 3 warnings (see follow-ups below). Portal scan: "No local code execution."                                                                |
+| Human review                              | pending      | Required for the first listing.                                                                                                                       |
+| Listed                                    | pending      | Appears under Discover after review clears.                                                                                                           |
+
+## Follow-ups from the 0.5.0 submission scan
+
+The portal flagged three non-blocking warnings on commit `a51f027`. We
+submitted anyway on the "release first, polish second" plan; tracked here
+so they don't get forgotten in a 0.5.x bump.
+
+| # | Warning                                                                 | Where                                                                                 | Fix                                                                                                                                                                                                                                                                                      |
+| - | ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1 | **No icon**                                                             | `plugin/.claude-plugin/icon.png`                                                      | **Done post-submission** in a follow-up commit (1024×1024 PNG derived from `assets/cterm.webp`). The portal warns the listing icon may be locked on first submit, so for the current submission this may not take effect — it's in place for any future resubmission and for local installs. |
+| 2 | **Unrecognized field in `plugin.json`** (`documentationUrl`, `supportUrl`) | `plugin/.claude-plugin/plugin.json`                                                   | The manifest reference says these are directory-only fields for the listing. The portal is now flagging them as unknown — either they got renamed, or they're accepted only once a plugin is Verified. Decide whether to drop or keep based on what the portal returns on the first scheduled re-scan. |
+| 3 | **`allowed-tools` beyond Read/Grep/Glob/LS accepted only from Verified organizations** | `plugin/commands/exec.md` (and the pattern applies to `sessions.md` / `tail.md` too) | Not refused today, but will be later. Either drop the `allowed-tools` frontmatter from the three command files (Claude Code will simply prompt the user on each `Bash(cterm:*)` call — acceptable), or narrow it, or pursue Verified-organization status. Default plan: drop it in 0.5.1. |
+
+Also while we're there:
+
+- **Frontmatter value may be misread** in `commands/exec.md` — the lint
+  flagged a quoting issue in the description/argument-hint lines. Fix as
+  part of the `allowed-tools` cleanup in 0.5.1.
+
+Tracked in [issue #21](https://github.com/maifeeulasad/cterm/issues/21)'s
+follow-up discussion for 0.5.1.
 
 ## Pre-submission checklist
 
