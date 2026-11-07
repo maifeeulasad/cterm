@@ -69,6 +69,20 @@
     color: var(--muted); margin: 0; padding: 10px 14px 6px;
     position: sticky; top: 0; background: var(--bg);
   }
+  .filter {
+    position: sticky; top: 28px; background: var(--bg); padding: 0 10px 8px;
+    display: flex; gap: 6px;
+  }
+  .filter input, .filter button {
+    background: var(--panel); color: var(--fg);
+    border: 1px solid var(--border); border-radius: 4px;
+    font: inherit; font-size: 12px; padding: 4px 8px; min-width: 0;
+  }
+  .filter input { flex: 1 1 auto; }
+  .filter input::placeholder { color: var(--muted); }
+  .filter input:focus-visible, .filter button:focus-visible {
+    outline: 2px solid var(--focus); outline-offset: 1px; border-color: var(--focus);
+  }
   .row {
     padding: 8px 14px; border-bottom: 1px solid var(--border); cursor: pointer;
   }
@@ -128,10 +142,30 @@
   <button id="refresh" type="button">Refresh</button>
 </header>
 <main>
-  <div class="col" id="sessions"><h2>Sessions</h2><div id="sessions-list"></div></div>
-  <div class="col" id="executions"><h2>Executions</h2><div id="executions-list"><div class="empty">Select a session</div></div></div>
+  <div class="col" id="sessions">
+    <h2 id="sessions-heading">Sessions</h2>
+    <div class="filter">
+      <input id="sessions-filter" type="search" placeholder="Filter: text or key=value"
+        aria-label="Filter sessions by title, id, host, or label key=value">
+    </div>
+    <div id="sessions-list"></div>
+  </div>
+  <div class="col" id="executions">
+    <h2 id="executions-heading">Executions</h2>
+    <div class="filter">
+      <input id="executions-filter" type="search" placeholder="Filter by command"
+        aria-label="Filter executions by command text">
+    </div>
+    <div id="executions-list"><div class="empty">Select a session</div></div>
+  </div>
   <div class="col" id="transcript-wrap">
-    <h2 style="position:static">Transcript</h2>
+    <h2 style="position:static" id="transcript-heading">Transcript</h2>
+    <div class="filter" id="transcript-search">
+      <input id="transcript-filter" type="search" placeholder="Find in transcript"
+        aria-label="Find text in transcript">
+      <button id="transcript-prev" type="button" aria-label="Previous match">↑</button>
+      <button id="transcript-next" type="button" aria-label="Next match">↓</button>
+    </div>
     <div id="transcript-head"><div class="empty">Select an execution</div></div>
     <div id="terminal"></div>
     <pre id="transcript-fallback" hidden></pre>
@@ -140,9 +174,19 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.min.css">
 <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xterm-addon-search@0.13.0/lib/xterm-addon-search.min.js"></script>
 <script>
 const $ = (id) => document.getElementById(id);
-let state = { session: null, execution: null };
+let state = {
+  session: null,
+  execution: null,
+  // Cache the raw server lists so filtering is instant and doesn't re-hit the API.
+  sessions: [],
+  executions: [],
+  sessionFilter: "",
+  executionFilter: "",
+  fallbackText: "",
+};
 let terminalRenderer = null;
 
 // ----- Theme (tri-state: system / light / dark) -----
@@ -212,29 +256,74 @@ function badge(status) {
 async function loadSessions() {
   const list = $("sessions-list");
   try {
-    const sessions = await api("/api/sessions");
-    if (!sessions.length) { list.innerHTML = '<div class="empty">No sessions yet</div>'; return; }
-    list.innerHTML = "";
-    for (const s of sessions) {
-      const div = document.createElement("div");
-      div.className = "row" + (state.session === s.id ? " sel" : "");
-      const titleHtml = s.title
-        ? `<div class="title">${esc(s.title)}</div>
-           <div class="meta mono">${esc(shortId(s.id))}</div>`
-        : `<div class="title mono">${esc(shortId(s.id))}</div>`;
-      const labelsHtml = s.labels && Object.keys(s.labels).length
-        ? `<div class="meta">${Object.entries(s.labels)
-            .map(([k, v]) => `<span class="label">${esc(k)}=${esc(String(v))}</span>`)
-            .join(" ")}</div>`
-        : "";
-      div.innerHTML = `${titleHtml}
-        <div class="meta">${esc(s.host?.name ?? "?")} · ${esc(s.shell ?? "")} · ${esc(String(s.status ?? ""))}</div>
-        ${labelsHtml}
-        <div class="meta">${esc(s.opened_at ?? "")}</div>`;
-      div.onclick = () => selectSession(s.id);
-      list.appendChild(div);
+    state.sessions = await api("/api/sessions");
+    renderSessions();
+  } catch (e) { list.innerHTML = `<div class="empty">Error: ${esc(e.message)}</div>`; }
+}
+
+function renderSessions() {
+  const list = $("sessions-list");
+  const filtered = state.sessions.filter((s) => matchesSessionFilter(s, state.sessionFilter));
+  if (!state.sessions.length) {
+    list.innerHTML = '<div class="empty">No sessions yet</div>';
+    return;
+  }
+  if (!filtered.length) {
+    list.innerHTML = '<div class="empty">No sessions match the filter</div>';
+    return;
+  }
+  list.innerHTML = "";
+  for (const s of filtered) {
+    const div = document.createElement("div");
+    div.className = "row" + (state.session === s.id ? " sel" : "");
+    const titleHtml = s.title
+      ? `<div class="title">${esc(s.title)}</div>
+         <div class="meta mono">${esc(shortId(s.id))}</div>`
+      : `<div class="title mono">${esc(shortId(s.id))}</div>`;
+    const labelsHtml = s.labels && Object.keys(s.labels).length
+      ? `<div class="meta">${Object.entries(s.labels)
+          .map(([k, v]) => `<span class="label">${esc(k)}=${esc(String(v))}</span>`)
+          .join(" ")}</div>`
+      : "";
+    div.innerHTML = `${titleHtml}
+      <div class="meta">${esc(s.host?.name ?? "?")} · ${esc(s.shell ?? "")} · ${esc(String(s.status ?? ""))}</div>
+      ${labelsHtml}
+      <div class="meta">${esc(s.opened_at ?? "")}</div>`;
+    div.onclick = () => selectSession(s.id);
+    list.appendChild(div);
+  }
+}
+
+/**
+ * A session matches the filter when every space-separated term in `q`
+ * matches one of: title, id, host name, shell, or a label `key=value`
+ * pair. A term shaped as `key=value` requires an exact label match so
+ * tags like `env=prod` can be the specific filter the user wanted.
+ */
+function matchesSessionFilter(s, q) {
+  const terms = String(q || "").trim().toLowerCase().split(/\s+/).filter(Boolean);
+  if (!terms.length) return true;
+  const hay = [
+    s.title || "",
+    s.id || "",
+    s.host?.name || "",
+    s.shell || "",
+  ].join(" ").toLowerCase();
+  const labels = s.labels || {};
+  return terms.every((t) => {
+    const eq = t.indexOf("=");
+    if (eq > 0) {
+      const k = t.slice(0, eq);
+      const v = t.slice(eq + 1);
+      return Object.entries(labels).some(
+        ([lk, lv]) => lk.toLowerCase() === k && String(lv).toLowerCase() === v
+      );
     }
-  } catch (e) { list.innerHTML = `<div class="empty">Error: ${e.message}</div>`; }
+    if (hay.includes(t)) return true;
+    return Object.entries(labels).some(([lk, lv]) =>
+      (lk + "=" + lv).toLowerCase().includes(t)
+    );
+  });
 }
 
 async function selectSession(id) {
@@ -248,22 +337,42 @@ async function selectSession(id) {
     state.execution = null;
     resetTranscriptPane();
   }
-  loadSessions();
+  renderSessions();
   const list = $("executions-list");
   list.innerHTML = '<div class="empty">Loading…</div>';
   try {
-    const execs = await api(`/api/sessions/${id}/executions`);
-    if (!execs.length) { list.innerHTML = '<div class="empty">No executions</div>'; return; }
-    list.innerHTML = "";
-    for (const e of execs) {
-      const div = document.createElement("div");
-      div.className = "row" + (state.execution === e.id ? " sel" : "");
-      div.innerHTML = `<div class="title mono">${e.command?.raw ?? shortId(e.id)}</div>
-        <div class="meta">${badge(e.status)} · ${e.started_at ?? ""}</div>`;
-      div.onclick = () => selectExecution(e.id);
-      list.appendChild(div);
-    }
-  } catch (e) { list.innerHTML = `<div class="empty">Error: ${e.message}</div>`; }
+    state.executions = await api(`/api/sessions/${id}/executions`);
+    renderExecutions();
+  } catch (e) { list.innerHTML = `<div class="empty">Error: ${esc(e.message)}</div>`; }
+}
+
+function renderExecutions() {
+  const list = $("executions-list");
+  const filtered = state.executions.filter((e) => matchesExecFilter(e, state.executionFilter));
+  if (!state.executions.length) {
+    list.innerHTML = '<div class="empty">No executions</div>';
+    return;
+  }
+  if (!filtered.length) {
+    list.innerHTML = '<div class="empty">No executions match the filter</div>';
+    return;
+  }
+  list.innerHTML = "";
+  for (const e of filtered) {
+    const div = document.createElement("div");
+    div.className = "row" + (state.execution === e.id ? " sel" : "");
+    div.innerHTML = `<div class="title mono">${esc(e.command?.raw ?? shortId(e.id))}</div>
+      <div class="meta">${badge(e.status)} · ${esc(e.started_at ?? "")}</div>`;
+    div.onclick = () => selectExecution(e.id);
+    list.appendChild(div);
+  }
+}
+
+function matchesExecFilter(e, q) {
+  const needle = String(q || "").trim().toLowerCase();
+  if (!needle) return true;
+  const hay = (e.command?.raw || "") + " " + (e.id || "");
+  return hay.toLowerCase().includes(needle);
 }
 
 function resetTranscriptPane() {
@@ -272,6 +381,10 @@ function resetTranscriptPane() {
   $("transcript-fallback").hidden = true;
   $("transcript-fallback").textContent = "";
   $("transcript-head").innerHTML = '<div class="empty">Select an execution</div>';
+  $("transcript-search").style.display = "none";
+  $("transcript-filter").value = "";
+  state.fallbackText = "";
+  fallbackMatchIndex = -1;
 }
 
 async function selectExecution(id) {
@@ -279,8 +392,8 @@ async function selectExecution(id) {
   if (state.session) selectSessionHighlight();
   try {
     const { record, text, chunks } = await api(`/api/executions/${id}/transcript`);
-    $("transcript-head").innerHTML = `<div class="cmd">${(record.command?.raw ?? "").replace(/</g,"&lt;")}</div>
-      <div class="meta">${badge(record.status)} · ${record.started_at ?? ""}${record.ended_at ? " → " + record.ended_at : ""}</div>`;
+    $("transcript-head").innerHTML = `<div class="cmd">${esc(record.command?.raw ?? "")}</div>
+      <div class="meta">${badge(record.status)} · ${esc(record.started_at ?? "")}${record.ended_at ? " → " + esc(record.ended_at) : ""}</div>`;
     if (record.command?.shell === "zsh" && window.Terminal) {
       if (terminalRenderer) terminalRenderer.dispose();
       terminalRenderer = new ZshTranscriptRenderer($("terminal"));
@@ -289,6 +402,7 @@ async function selectExecution(id) {
     } else {
       showFallback(text);
     }
+    $("transcript-search").style.display = "flex";
   } catch (e) { showFallback("Error: " + e.message); }
 }
 function showFallback(text) {
@@ -296,6 +410,47 @@ function showFallback(text) {
   $("terminal").replaceChildren();
   $("transcript-fallback").hidden = false;
   $("transcript-fallback").textContent = text || "(no output recorded)";
+  state.fallbackText = text || "";
+}
+
+// ----- Transcript search -----
+//
+// Two render paths: xterm (zsh transcripts) uses xterm-addon-search's
+// findNext/findPrevious with highlighting; the <pre> fallback path does a
+// browser-side substring hop that scrolls the first/next match into view.
+function transcriptQuery() { return $("transcript-filter").value || ""; }
+let fallbackMatchIndex = -1;
+function findInTranscript(dir) {
+  const q = transcriptQuery();
+  if (!q) return;
+  if (terminalRenderer && terminalRenderer.search) {
+    const opts = { incremental: false, decorations: { matchBackground: "#e6b955" } };
+    if (dir === "prev") terminalRenderer.search.findPrevious(q, opts);
+    else terminalRenderer.search.findNext(q, opts);
+    return;
+  }
+  const pre = $("transcript-fallback");
+  if (pre.hidden) return;
+  const text = state.fallbackText || pre.textContent || "";
+  const low = text.toLowerCase();
+  const needle = q.toLowerCase();
+  if (!needle) return;
+  let next;
+  if (dir === "prev") {
+    const from = fallbackMatchIndex > 0 ? fallbackMatchIndex - 1 : text.length;
+    next = low.lastIndexOf(needle, from);
+    if (next < 0) next = low.lastIndexOf(needle);
+  } else {
+    const from = fallbackMatchIndex >= 0 ? fallbackMatchIndex + 1 : 0;
+    next = low.indexOf(needle, from);
+    if (next < 0) next = low.indexOf(needle);
+  }
+  if (next < 0) return;
+  fallbackMatchIndex = next;
+  // Scroll the match into view: compute approximate y by splitting on \n.
+  const line = text.slice(0, next).split("\n").length - 1;
+  const lineHeight = parseFloat(getComputedStyle(pre).lineHeight) || 18;
+  pre.scrollTo({ top: Math.max(0, line * lineHeight - pre.clientHeight / 2), behavior: "smooth" });
 }
 
 class ZshTranscriptRenderer {
@@ -312,6 +467,10 @@ class ZshTranscriptRenderer {
       ? new window.FitAddon.FitAddon()
       : null;
     if (this.fit) this.terminal.loadAddon(this.fit);
+    this.search = (window.SearchAddon && window.SearchAddon.SearchAddon)
+      ? new window.SearchAddon.SearchAddon()
+      : null;
+    if (this.search) this.terminal.loadAddon(this.search);
     this.terminal.open(container);
     this.safeFit();
     // The fit addon measures the container; re-fit on viewport resize so the
@@ -363,6 +522,29 @@ function selectSessionHighlight() {
 
 $("refresh").onclick = () => { loadSessions(); if (state.session) selectSession(state.session); };
 $("theme-toggle").onclick = cycleTheme;
+
+// Live filter inputs — "input" fires per-keystroke, including when the user
+// clicks the native clear (×) button on <input type="search">.
+$("sessions-filter").addEventListener("input", (ev) => {
+  state.sessionFilter = ev.target.value;
+  renderSessions();
+});
+$("executions-filter").addEventListener("input", (ev) => {
+  state.executionFilter = ev.target.value;
+  renderExecutions();
+});
+// Transcript find: Enter = next, Shift+Enter = previous, matches the de-facto
+// browser find dialog convention.
+$("transcript-filter").addEventListener("keydown", (ev) => {
+  if (ev.key === "Enter") {
+    ev.preventDefault();
+    findInTranscript(ev.shiftKey ? "prev" : "next");
+  }
+});
+$("transcript-prev").onclick = () => findInTranscript("prev");
+$("transcript-next").onclick = () => findInTranscript("next");
+$("transcript-search").style.display = "none";
+
 loadSessions();
 </script>
 </body>
