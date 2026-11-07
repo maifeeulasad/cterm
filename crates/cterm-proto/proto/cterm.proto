@@ -59,10 +59,16 @@ message Host {
 }
 
 message Session {
+  enum Status {
+    STATUS_UNSPECIFIED = 0;
+    ACTIVE = 1;
+    CLOSED = 2;
+    DROPPED = 3;
+  }
   string id = 1;
   Host host = 2;
   string shell = 3;
-  string status = 4;     // "active" | "closed" | "dropped"
+  Status status = 4;
   string opened_at = 5;  // RFC3339
   string closed_at = 6;  // RFC3339, empty if still open
 }

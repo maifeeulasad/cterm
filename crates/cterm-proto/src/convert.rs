@@ -61,15 +61,14 @@ pub fn host(h: &core::Host) -> v1::Host {
     }
 }
 
-/// The lowercase string form of a session status used on the wire.
+/// Maps a session lifecycle status to its proto enum value.
 #[must_use]
-pub fn session_status(s: core::SessionStatus) -> String {
+pub fn session_status(s: core::SessionStatus) -> v1::session::Status {
     match s {
-        core::SessionStatus::Active => "active",
-        core::SessionStatus::Closed => "closed",
-        core::SessionStatus::Dropped => "dropped",
+        core::SessionStatus::Active => v1::session::Status::Active,
+        core::SessionStatus::Closed => v1::session::Status::Closed,
+        core::SessionStatus::Dropped => v1::session::Status::Dropped,
     }
-    .to_owned()
 }
 
 /// Maps a session.
@@ -79,7 +78,7 @@ pub fn session(s: &core::Session) -> v1::Session {
         id: s.id.to_string(),
         host: Some(host(&s.host)),
         shell: s.shell.clone(),
-        status: session_status(s.status),
+        status: session_status(s.status) as i32,
         opened_at: ts(s.opened_at),
         closed_at: ts_opt(s.closed_at),
     }
