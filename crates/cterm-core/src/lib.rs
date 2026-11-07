@@ -47,6 +47,8 @@ pub use event::ExecutionEvent;
 pub use ids::{ExecutionId, SessionId};
 pub use ports::{RecordStore, TerminalControl};
 pub use record::ExecutionRecord;
-pub use session::{Host, Session};
+pub use session::{
+    validate_labels, validate_title, Host, Session, MAX_LABELS, MAX_LABEL_BYTES, MAX_TITLE_BYTES,
+};
 pub use status::{ExecutionStatus, SessionStatus};
 pub use stream::{StreamChunk, StreamKind};

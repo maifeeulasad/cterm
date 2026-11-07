@@ -71,6 +71,11 @@ message Session {
   Status status = 4;
   string opened_at = 5;  // RFC3339
   string closed_at = 6;  // RFC3339, empty if still open
+  // Caller-supplied one-line title. Empty = unset. Shown in listings.
+  string title = 7;
+  // Caller-supplied key/value metadata (e.g. env=prod, ticket=ABC-123).
+  // Not indexed; use ListSessions + client-side filter.
+  map<string, string> labels = 8;
 }
 
 message Command {
@@ -114,6 +119,12 @@ message RunRequest {
   string cwd = 5;
   uint32 rows = 6;           // default 24
   uint32 cols = 7;           // default 80
+  // When opening a new session (session == ""), attach this title. Ignored
+  // on an existing session. Empty = untitled.
+  string title = 8;
+  // When opening a new session (session == ""), attach these labels. Ignored
+  // on an existing session.
+  map<string, string> labels = 9;
 }
 
 message StreamExecutionRequest {

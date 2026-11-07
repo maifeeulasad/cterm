@@ -81,6 +81,8 @@ pub fn session(s: &core::Session) -> v1::Session {
         status: session_status(s.status) as i32,
         opened_at: ts(s.opened_at),
         closed_at: ts_opt(s.closed_at),
+        title: s.title.clone(),
+        labels: s.labels.clone().into_iter().collect(),
     }
 }
 

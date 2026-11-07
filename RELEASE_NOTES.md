@@ -6,9 +6,13 @@ open the session**.
 
 > Early release. Tri-platform; shared for feedback. Expect rough edges.
 
-## 0.6.0 — opt-in bearer-token auth for the daemon
+## 0.6.0 — opt-in auth + session metadata
 
-**Security release.** The gRPC `Terminal` service can now require a bearer
+Two features ship together:
+
+### Opt-in bearer-token auth for the daemon
+
+**Security.** The gRPC `Terminal` service can now require a bearer
 token on every RPC ([#27](https://github.com/maifeeulasad/cterm/issues/27)).
 Default behavior is unchanged — single-user developer machines keep the
 open-on-loopback model — but multi-user hosts, containers, CI runners, and
@@ -57,13 +61,52 @@ hardware-backed credentials are all explicitly out of scope — the
 expected deployment is loopback-only. If you need any of these, open an
 issue on [#27](https://github.com/maifeeulasad/cterm/issues/27).
 
+### Session titles and labels
+
+Sessions can now carry an optional one-line `title` and a small
+`BTreeMap<String, String>` of `labels`
+([#28](https://github.com/maifeeulasad/cterm/issues/28)). Attach them at
+open time; they show up in `ListSessions` and in the `cterm-web` session
+list, and do not affect scheduling, storage identity, or how the shell
+runs.
+
+```bash
+cterm execute --title "deploy webapp" --label env=staging --label ticket=ABC-123 \
+  'kubectl apply -f manifest.yaml'
+```
+
+- **Validation is strict at the daemon boundary**: title ≤ 256 bytes, no
+  newlines/ANSI; ≤ 32 labels, key/value each ≤ 128 bytes, no control
+  characters in either, `=` banned in keys. Violations land as a clear
+  `InvalidArgument` rather than silent truncation.
+- **Metadata is set at open time only** in this release. A dedicated
+  `UpdateSessionMetadata` RPC is a follow-up.
+- **No schema migration, no wire break**: new proto3 fields default
+  empty; `Session` in `cterm-core` carries `#[serde(default,
+  skip_serializing_if = "...is_empty")]` on both fields so pre-0.6
+  session blobs deserialize unchanged and fresh sessions without
+  metadata serialize byte-for-byte as before.
+
+Full flow, limits, and non-goals in
+[docs/session-metadata.md](docs/session-metadata.md).
+
 ### Compatibility
 
 No wire-format or Cargo-API breaking changes. Existing clients continue
 to work against a default (open) daemon, and an existing open daemon
 continues to work with upgraded clients. The new `terminal_server_with_auth`
 factory is additive; the previous `terminal_server` factory still exists
-for callers (and tests) that explicitly want no auth.
+for callers (and tests) that explicitly want no auth. All new proto
+fields (`Session.title`, `Session.labels`, `RunRequest.title`,
+`RunRequest.labels`) are proto3-default-empty, so older clients and
+older daemons interoperate with upgraded peers in either direction.
+
+### Web UI hardening
+
+While adding title/labels rendering to `cterm-web`, every session-row
+field is now HTML-escaped through a new `esc()` helper — including
+fields that were previously interpolated raw. Loopback-only service,
+but worth doing once rather than leaving the sharp edge.
 
 ## 0.5.2 — plugin listing: privacy policy + terms of service
 

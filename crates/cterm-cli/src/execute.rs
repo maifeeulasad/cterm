@@ -41,6 +41,10 @@ struct ExecuteArgs {
     json: bool,
     quiet: bool,
     command: String,
+    /// Session title, applied only when opening a new session (no --id).
+    title: String,
+    /// Session labels, applied only when opening a new session (no --id).
+    labels: std::collections::HashMap<String, String>,
 }
 
 /// Entry point used by `main.rs`.
@@ -95,6 +99,8 @@ fn parse(args: &[String]) -> CliResult<ExecuteArgs> {
     let mut json = false;
     let mut quiet = false;
     let mut command: Option<String> = None;
+    let mut title = String::new();
+    let mut labels: std::collections::HashMap<String, String> = std::collections::HashMap::new();
 
     let mut it = args.iter();
     while let Some(a) = it.next() {
@@ -106,6 +112,14 @@ fn parse(args: &[String]) -> CliResult<ExecuteArgs> {
             "--cwd" => cwd = take_value("--cwd", &mut it)?,
             "--rows" => rows = parse_u32("--rows", &take_value("--rows", &mut it)?)?,
             "--cols" => cols = parse_u32("--cols", &take_value("--cols", &mut it)?)?,
+            "--title" => title = take_value("--title", &mut it)?,
+            "--label" => {
+                let raw = take_value("--label", &mut it)?;
+                let (k, v) = raw
+                    .split_once('=')
+                    .ok_or_else(|| msg(format!("--label expects KEY=VALUE, got {raw:?}")))?;
+                labels.insert(k.to_owned(), v.to_owned());
+            }
             "--json" => json = true,
             "--quiet" => quiet = true,
             "-h" | "--help" => {
@@ -136,6 +150,15 @@ fn parse(args: &[String]) -> CliResult<ExecuteArgs> {
 
     let command = command.ok_or_else(|| msg("missing command"))?;
 
+    // --title / --label are only meaningful when opening a new session.
+    // Error loudly if the caller passed both --id and metadata so they
+    // don't silently assume the daemon applied it.
+    if !session.is_empty() && (!title.is_empty() || !labels.is_empty()) {
+        return Err(msg(
+            "--title/--label only apply when opening a new session (no --id)",
+        ));
+    }
+
     Ok(ExecuteArgs {
         addr,
         session,
@@ -147,6 +170,8 @@ fn parse(args: &[String]) -> CliResult<ExecuteArgs> {
         json,
         quiet,
         command,
+        title,
+        labels,
     })
 }
 
@@ -195,6 +220,8 @@ async fn execute(args: ExecuteArgs) -> CliResult<i32> {
         cwd: args.cwd.clone(),
         rows: args.rows,
         cols: args.cols,
+        title: args.title.clone(),
+        labels: args.labels.clone(),
     };
 
     let mut stream = client
@@ -399,6 +426,11 @@ FLAGS:
     --cwd <PATH>         Working directory on the daemon host.
     --rows <N>           PTY rows (default 24).
     --cols <N>           PTY cols (default 80).
+    --title <TEXT>       Title for a new session (only when --id is not set).
+                         <= 256 bytes, no newlines or ANSI escapes.
+    --label KEY=VALUE    Attach a label to a new session (may be repeated).
+                         <= 32 entries, key/value each <= 128 bytes. Only
+                         applied when --id is not set.
     --json               Emit one NDJSON event per line on stdout instead of
                          streaming raw output. Chunks are base64 in data_b64.
     --quiet              Suppress chunk output; print only the final status on

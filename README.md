@@ -132,6 +132,19 @@ CTERM_AUTH=on cterm-daemon            # enforces it on every RPC
 Full flow (token precedence, rotation, `CTERM_AUTH_TOKEN` escape hatch for
 headless hosts, status/disable) is in [docs/auth.md](docs/auth.md).
 
+## Session metadata
+
+Sessions can carry an optional one-line `title` and a small map of `labels`
+(`env=prod`, `ticket=ABC-123`, …) set at open time:
+
+```bash
+cterm execute --title "deploy webapp" --label env=staging \
+  'kubectl apply -f manifest.yaml'
+```
+
+Both show in the `cterm-web` session list. Full rules and limits in
+[docs/session-metadata.md](docs/session-metadata.md).
+
 ## Claude plugin
 
 cterm ships as a [Claude plugin](docs/claude-plugin/README.md) in [plugin/](plugin/),
