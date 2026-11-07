@@ -12,6 +12,7 @@
 mod commands;
 mod config;
 mod error;
+mod execute;
 mod layout;
 mod selfcmd;
 mod service;
@@ -48,6 +49,7 @@ fn cli(args: &[String]) -> i32 {
         Some("service") => cmd_service(&args[1..]),
         Some("doctor") => selfcmd::doctor(&layout_or_die()),
         Some("link") => cmd_link(&args[1..]),
+        Some("execute") | Some("exec") => execute::run(&args[1..]),
         Some("update") | Some("upgrade") => cmd_update(&args[1..]),
         Some("-h") | Some("--help") | Some("help") | None => {
             // Help goes to stdout so it can be captured by scripts/agents.
@@ -262,6 +264,11 @@ COMMANDS:
         bin dir (--user: ~/.local/bin or %LOCALAPPDATA%\\cterm\\bin [default];
         --system: /usr/local/bin or %ProgramFiles%\\cterm). Symlinks on Unix,
         copies on Windows. Never edits PATH; prints how if the dir isn't on it.
+    execute [--id <session>] [--addr <url>] [--json|--quiet] <COMMAND>
+        (alias: exec) Run <COMMAND> on the daemon over gRPC and stream the
+        output. Exits with the command's own exit code. Agent-friendly front
+        door over the Terminal.Run RPC — no tonic/grpcurl/protoc needed on
+        the client side. `cterm execute --help` for all flags.
     doctor                        Diagnose the install (version/update, binaries,
                                   shims, PATH, records db, daemon, autostart).
     -h, --help                    Show this help (on stdout).
