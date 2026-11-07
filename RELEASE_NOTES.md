@@ -1,10 +1,29 @@
-# cterm v0.5.1
+# cterm v0.5.2
 
 A terminal integration / shim tool that lets agents observe, record, stream, and
 drive shell command executions **without ever holding the credentials used to
 open the session**.
 
 > Early release. Tri-platform; shared for feedback. Expect rough edges.
+
+## 0.5.2 — plugin listing: privacy policy + terms of service
+
+Docs-only patch so the Claude directory listing can surface a policy pair
+([#21](https://github.com/maifeeulasad/cterm/issues/21)). No daemon,
+CLI, or wire-format changes.
+
+- **`PRIVACY.md`** — explicitly local-first: no server behind cterm, no
+  analytics, no telemetry, no crash reporting. The daemon writes its
+  SQLite file on the user's disk and listens on `127.0.0.1` by default;
+  nothing phones home beyond the GitHub Releases fetch that backs
+  `cterm update`.
+- **`TERMS.md`** — the GPL-3.0's own warranty and liability disclaimers
+  plus a short "you control the host, you're responsible for the
+  commands, don't use this to break the law" section. The plugin
+  inherits both documents.
+- **`plugin.json`** — now carries `privacyPolicyUrl` and
+  `termsOfServiceUrl` pointing at those files on GitHub, so the
+  directory listing can link them.
 
 ## 0.5.1 — directory-review fixes for the Claude plugin
 
