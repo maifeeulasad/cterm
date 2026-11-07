@@ -5,16 +5,47 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>cterm</title>
 <style>
+  /* Dark palette (default). */
   :root {
     --bg: #0f1115; --panel: #171a21; --border: #262b36; --fg: #d7dce3;
     --muted: #8b94a3; --accent: #5aa9e6; --ok: #57c785; --warn: #e6b955;
     --bad: #e06c75; --sel: #223049;
+    --label-bg: #1f2937; --label-fg: #a5b4fc;
+    --term-bg: #0f1115; --term-fg: #c8d0da;
+    --focus: #8ab4f8;
+    color-scheme: dark;
+  }
+  /* Auto light palette when the OS/browser asks for it, unless the user
+     explicitly picked a theme (data-theme="dark" wins the cascade). */
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) {
+      --bg: #ffffff; --panel: #f6f8fa; --border: #d0d7de; --fg: #1f2328;
+      --muted: #57606a; --accent: #0969da; --ok: #1a7f37; --warn: #9a6700;
+      --bad: #cf222e; --sel: #ddf4ff;
+      --label-bg: #ddf4ff; --label-fg: #0550ae;
+      --term-bg: #ffffff; --term-fg: #1f2328;
+      --focus: #0969da;
+      color-scheme: light;
+    }
+  }
+  /* Explicit opt-in via the header toggle (overrides prefers-color-scheme). */
+  :root[data-theme="light"] {
+    --bg: #ffffff; --panel: #f6f8fa; --border: #d0d7de; --fg: #1f2328;
+    --muted: #57606a; --accent: #0969da; --ok: #1a7f37; --warn: #9a6700;
+    --bad: #cf222e; --sel: #ddf4ff;
+    --label-bg: #ddf4ff; --label-fg: #0550ae;
+    --term-bg: #ffffff; --term-fg: #1f2328;
+    --focus: #0969da;
+    color-scheme: light;
   }
   * { box-sizing: border-box; }
+  html, body { height: 100%; }
   body {
     margin: 0; background: var(--bg); color: var(--fg);
     font: 14px/1.45 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-    height: 100vh; display: flex; flex-direction: column;
+    /* dvh handles mobile browser chrome collapse/expand; vh is the fallback */
+    height: 100vh; height: 100dvh;
+    display: flex; flex-direction: column;
   }
   header {
     padding: 10px 16px; border-bottom: 1px solid var(--border);
@@ -23,17 +54,34 @@
   header h1 { font-size: 15px; margin: 0; letter-spacing: .5px; }
   header .sub { color: var(--muted); font-size: 12px; }
   header button {
-    margin-left: auto; background: var(--sel); color: var(--fg);
+    background: var(--sel); color: var(--fg);
     border: 1px solid var(--border); border-radius: 6px; padding: 5px 10px;
     cursor: pointer; font-size: 12px;
   }
   header button:hover { border-color: var(--accent); }
+  /* First button in the header gets the "push to the right" margin so the
+     toggle set hugs the right edge without each button needing to know. */
+  header button:first-of-type { margin-left: auto; }
   main { flex: 1; display: grid; grid-template-columns: 260px 320px 1fr; min-height: 0; }
   .col { border-right: 1px solid var(--border); overflow-y: auto; min-height: 0; }
   .col h2 {
     font-size: 11px; text-transform: uppercase; letter-spacing: .08em;
     color: var(--muted); margin: 0; padding: 10px 14px 6px;
     position: sticky; top: 0; background: var(--bg);
+  }
+  .filter {
+    position: sticky; top: 28px; background: var(--bg); padding: 0 10px 8px;
+    display: flex; gap: 6px;
+  }
+  .filter input, .filter button {
+    background: var(--panel); color: var(--fg);
+    border: 1px solid var(--border); border-radius: 4px;
+    font: inherit; font-size: 12px; padding: 4px 8px; min-width: 0;
+  }
+  .filter input { flex: 1 1 auto; }
+  .filter input::placeholder { color: var(--muted); }
+  .filter input:focus-visible, .filter button:focus-visible {
+    outline: 2px solid var(--focus); outline-offset: 1px; border-color: var(--focus);
   }
   .row {
     padding: 8px 14px; border-bottom: 1px solid var(--border); cursor: pointer;
@@ -47,8 +95,8 @@
     padding: 1px 6px;
     margin-right: 4px;
     border-radius: 3px;
-    background: #eef2ff;
-    color: #3730a3;
+    background: var(--label-bg);
+    color: var(--label-fg);
     font-family: ui-monospace, Menlo, Consolas, monospace;
     font-size: 11px;
   }
@@ -68,40 +116,150 @@
   }
   #transcript-head .meta { color: var(--muted); font-size: 12px; margin-top: 4px; }
   #terminal {
-    flex: 1; min-height: 0; padding: 14px 16px; overflow: hidden;
-    background: #0f1115;
+    flex: 1 1 0%; min-height: 0; padding: 14px 16px; overflow: hidden;
+    background: var(--term-bg);
   }
-  #terminal .xterm { height: 100%; }
+  /* xterm.js needs its direct children to fill the host so the fit addon
+     can measure them correctly — otherwise the terminal renders at its
+     default rows/cols and leaves the bottom of the viewport empty. */
+  #terminal .xterm, #terminal .xterm-viewport,
+  #terminal .xterm-screen { height: 100% !important; width: 100% !important; }
   pre#transcript-fallback {
-    flex: 1; margin: 0; padding: 14px 16px; overflow: auto; white-space: pre-wrap;
-    word-break: break-word; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-    font-size: 13px; color: #c8d0da;
+    flex: 1 1 0%; min-height: 0; margin: 0; padding: 14px 16px; overflow: auto;
+    white-space: pre-wrap; word-break: break-word;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 13px; color: var(--term-fg); background: var(--term-bg);
   }
   .empty { color: var(--muted); padding: 14px; font-style: italic; }
+  /* Visible focus ring everywhere: the default outline is removed by too many
+     resets, so re-establish it with the themed accent on the one state that
+     matters for keyboard users. */
+  :focus { outline: none; }
+  :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  .row:focus-visible { outline-offset: -2px; } /* inside the border, not over it */
+  /* Skip-to-content link — visually hidden until keyboard-focused. */
+  .skip-link {
+    position: absolute; left: 8px; top: -40px; padding: 6px 10px;
+    background: var(--sel); color: var(--fg); border: 1px solid var(--focus);
+    border-radius: 6px; z-index: 10;
+  }
+  .skip-link:focus { top: 8px; }
+  /* Screen-reader-only text used for row descriptions. */
+  .sr-only {
+    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important; transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
 </style>
 </head>
 <body>
-<header>
+<a href="#main-content" class="skip-link">Skip to transcript</a>
+<header role="banner">
   <h1>cterm</h1>
   <span class="sub">recorded terminal sessions</span>
-  <button id="refresh">Refresh</button>
+  <button id="theme-toggle" type="button" aria-label="Toggle color theme"
+    title="Toggle light / dark / system theme">theme</button>
+  <button id="refresh" type="button">Refresh</button>
 </header>
-<main>
-  <div class="col" id="sessions"><h2>Sessions</h2><div id="sessions-list"></div></div>
-  <div class="col" id="executions"><h2>Executions</h2><div id="executions-list"><div class="empty">Select a session</div></div></div>
-  <div class="col" id="transcript-wrap">
-    <h2 style="position:static">Transcript</h2>
+<div id="live-status" class="sr-only" role="status" aria-live="polite"></div>
+<main id="main-content">
+  <nav class="col" id="sessions" aria-labelledby="sessions-heading">
+    <h2 id="sessions-heading">Sessions</h2>
+    <div class="filter" role="search">
+      <label class="sr-only" for="sessions-filter">Filter sessions</label>
+      <input id="sessions-filter" type="search" placeholder="Filter: text or key=value"
+        aria-label="Filter sessions by title, id, host, or label key=value">
+    </div>
+    <div id="sessions-list" role="listbox" aria-label="Sessions" tabindex="0"></div>
+  </nav>
+  <nav class="col" id="executions" aria-labelledby="executions-heading">
+    <h2 id="executions-heading">Executions</h2>
+    <div class="filter" role="search">
+      <label class="sr-only" for="executions-filter">Filter executions</label>
+      <input id="executions-filter" type="search" placeholder="Filter by command"
+        aria-label="Filter executions by command text">
+    </div>
+    <div id="executions-list" role="listbox" aria-label="Executions" tabindex="0">
+      <div class="empty">Select a session</div>
+    </div>
+  </nav>
+  <section class="col" id="transcript-wrap" aria-labelledby="transcript-heading">
+    <h2 style="position:static" id="transcript-heading">Transcript</h2>
+    <div class="filter" id="transcript-search" role="search">
+      <label class="sr-only" for="transcript-filter">Find in transcript</label>
+      <input id="transcript-filter" type="search" placeholder="Find in transcript"
+        aria-label="Find text in transcript (Enter for next, Shift+Enter for previous)">
+      <button id="transcript-prev" type="button" aria-label="Previous match">↑</button>
+      <button id="transcript-next" type="button" aria-label="Next match">↓</button>
+    </div>
     <div id="transcript-head"><div class="empty">Select an execution</div></div>
-    <div id="terminal"></div>
-    <pre id="transcript-fallback" hidden></pre>
-  </div>
+    <div id="terminal" aria-label="Terminal transcript"></div>
+    <pre id="transcript-fallback" hidden aria-label="Plain-text transcript"></pre>
+  </section>
 </main>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.min.css">
 <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xterm-addon-search@0.13.0/lib/xterm-addon-search.min.js"></script>
 <script>
 const $ = (id) => document.getElementById(id);
-let state = { session: null, execution: null };
+let state = {
+  session: null,
+  execution: null,
+  // Cache the raw server lists so filtering is instant and doesn't re-hit the API.
+  sessions: [],
+  executions: [],
+  sessionFilter: "",
+  executionFilter: "",
+  fallbackText: "",
+};
 let terminalRenderer = null;
+
+// ----- Theme (tri-state: system / light / dark) -----
+//
+// Persisted in localStorage under "cterm.theme". When unset ("system"),
+// CSS's @media (prefers-color-scheme) wins. Explicit light/dark pins
+// the palette via data-theme on <html>.
+const THEME_KEY = "cterm.theme";
+const THEME_CYCLE = ["system", "light", "dark"];
+
+function readTheme() {
+  try { return localStorage.getItem(THEME_KEY) || "system"; }
+  catch (_) { return "system"; }
+}
+function applyTheme(choice) {
+  if (choice === "system") document.documentElement.removeAttribute("data-theme");
+  else document.documentElement.setAttribute("data-theme", choice);
+  const btn = $("theme-toggle");
+  if (btn) {
+    const nextIndex = (THEME_CYCLE.indexOf(choice) + 1) % THEME_CYCLE.length;
+    btn.textContent = `theme: ${choice}`;
+    btn.setAttribute("aria-label",
+      `Current theme: ${choice}. Click to switch to ${THEME_CYCLE[nextIndex]}.`);
+  }
+  // Re-theme an already-mounted terminal so xterm picks the new palette.
+  if (terminalRenderer && terminalRenderer.applyTheme) terminalRenderer.applyTheme();
+}
+function cycleTheme() {
+  const next = THEME_CYCLE[(THEME_CYCLE.indexOf(readTheme()) + 1) % THEME_CYCLE.length];
+  try { localStorage.setItem(THEME_KEY, next); } catch (_) {}
+  applyTheme(next);
+}
+// System theme changes (user flips dark mode in the OS) refresh xterm too.
+if (window.matchMedia) {
+  window.matchMedia("(prefers-color-scheme: dark)")
+    .addEventListener("change", () => {
+      if (readTheme() === "system" && terminalRenderer && terminalRenderer.applyTheme) {
+        terminalRenderer.applyTheme();
+      }
+    });
+}
+applyTheme(readTheme());
 
 async function api(path) {
   const r = await fetch(path);
@@ -129,48 +287,184 @@ function badge(status) {
 async function loadSessions() {
   const list = $("sessions-list");
   try {
-    const sessions = await api("/api/sessions");
-    if (!sessions.length) { list.innerHTML = '<div class="empty">No sessions yet</div>'; return; }
-    list.innerHTML = "";
-    for (const s of sessions) {
-      const div = document.createElement("div");
-      div.className = "row" + (state.session === s.id ? " sel" : "");
-      const titleHtml = s.title
-        ? `<div class="title">${esc(s.title)}</div>
-           <div class="meta mono">${esc(shortId(s.id))}</div>`
-        : `<div class="title mono">${esc(shortId(s.id))}</div>`;
-      const labelsHtml = s.labels && Object.keys(s.labels).length
-        ? `<div class="meta">${Object.entries(s.labels)
-            .map(([k, v]) => `<span class="label">${esc(k)}=${esc(String(v))}</span>`)
-            .join(" ")}</div>`
-        : "";
-      div.innerHTML = `${titleHtml}
-        <div class="meta">${esc(s.host?.name ?? "?")} · ${esc(s.shell ?? "")} · ${esc(String(s.status ?? ""))}</div>
-        ${labelsHtml}
-        <div class="meta">${esc(s.opened_at ?? "")}</div>`;
-      div.onclick = () => selectSession(s.id);
-      list.appendChild(div);
+    state.sessions = await api("/api/sessions");
+    renderSessions();
+  } catch (e) { list.innerHTML = `<div class="empty">Error: ${esc(e.message)}</div>`; }
+}
+
+function renderSessions() {
+  const list = $("sessions-list");
+  const filtered = state.sessions.filter((s) => matchesSessionFilter(s, state.sessionFilter));
+  if (!state.sessions.length) {
+    list.innerHTML = '<div class="empty">No sessions yet</div>';
+    return;
+  }
+  if (!filtered.length) {
+    list.innerHTML = '<div class="empty">No sessions match the filter</div>';
+    announce(`No sessions match filter "${state.sessionFilter}"`);
+    return;
+  }
+  list.innerHTML = "";
+  for (const s of filtered) {
+    const div = document.createElement("div");
+    const selected = state.session === s.id;
+    div.className = "row" + (selected ? " sel" : "");
+    div.setAttribute("role", "option");
+    div.setAttribute("tabindex", "-1");
+    div.setAttribute("aria-selected", selected ? "true" : "false");
+    const titleHtml = s.title
+      ? `<div class="title">${esc(s.title)}</div>
+         <div class="meta mono">${esc(shortId(s.id))}</div>`
+      : `<div class="title mono">${esc(shortId(s.id))}</div>`;
+    const labelsHtml = s.labels && Object.keys(s.labels).length
+      ? `<div class="meta">${Object.entries(s.labels)
+          .map(([k, v]) => `<span class="label">${esc(k)}=${esc(String(v))}</span>`)
+          .join(" ")}</div>`
+      : "";
+    div.innerHTML = `${titleHtml}
+      <div class="meta">${esc(s.host?.name ?? "?")} · ${esc(s.shell ?? "")} · ${esc(String(s.status ?? ""))}</div>
+      ${labelsHtml}
+      <div class="meta">${esc(s.opened_at ?? "")}</div>`;
+    div.onclick = () => selectSession(s.id);
+    list.appendChild(div);
+  }
+}
+
+/**
+ * A session matches the filter when every space-separated term in `q`
+ * matches one of: title, id, host name, shell, or a label `key=value`
+ * pair. A term shaped as `key=value` requires an exact label match so
+ * tags like `env=prod` can be the specific filter the user wanted.
+ */
+function matchesSessionFilter(s, q) {
+  const terms = String(q || "").trim().toLowerCase().split(/\s+/).filter(Boolean);
+  if (!terms.length) return true;
+  const hay = [
+    s.title || "",
+    s.id || "",
+    s.host?.name || "",
+    s.shell || "",
+  ].join(" ").toLowerCase();
+  const labels = s.labels || {};
+  return terms.every((t) => {
+    const eq = t.indexOf("=");
+    if (eq > 0) {
+      const k = t.slice(0, eq);
+      const v = t.slice(eq + 1);
+      return Object.entries(labels).some(
+        ([lk, lv]) => lk.toLowerCase() === k && String(lv).toLowerCase() === v
+      );
     }
-  } catch (e) { list.innerHTML = `<div class="empty">Error: ${e.message}</div>`; }
+    if (hay.includes(t)) return true;
+    return Object.entries(labels).some(([lk, lv]) =>
+      (lk + "=" + lv).toLowerCase().includes(t)
+    );
+  });
 }
 
 async function selectSession(id) {
-  state.session = id; loadSessions();
+  // Fresh session click clears the previously-chosen execution and the
+  // right-pane transcript — without this, switching sessions left the old
+  // execution looking "still selected" and showed stale output until the
+  // user clicked a new execution.
+  const sessionChanged = state.session !== id;
+  state.session = id;
+  if (sessionChanged) {
+    state.execution = null;
+    resetTranscriptPane();
+  }
+  renderSessions();
   const list = $("executions-list");
   list.innerHTML = '<div class="empty">Loading…</div>';
   try {
-    const execs = await api(`/api/sessions/${id}/executions`);
-    if (!execs.length) { list.innerHTML = '<div class="empty">No executions</div>'; return; }
-    list.innerHTML = "";
-    for (const e of execs) {
-      const div = document.createElement("div");
-      div.className = "row" + (state.execution === e.id ? " sel" : "");
-      div.innerHTML = `<div class="title mono">${e.command?.raw ?? shortId(e.id)}</div>
-        <div class="meta">${badge(e.status)} · ${e.started_at ?? ""}</div>`;
-      div.onclick = () => selectExecution(e.id);
-      list.appendChild(div);
+    state.executions = await api(`/api/sessions/${id}/executions`);
+    renderExecutions();
+  } catch (e) { list.innerHTML = `<div class="empty">Error: ${esc(e.message)}</div>`; }
+}
+
+function renderExecutions() {
+  const list = $("executions-list");
+  const filtered = state.executions.filter((e) => matchesExecFilter(e, state.executionFilter));
+  if (!state.executions.length) {
+    list.innerHTML = '<div class="empty">No executions</div>';
+    return;
+  }
+  if (!filtered.length) {
+    list.innerHTML = '<div class="empty">No executions match the filter</div>';
+    announce(`No executions match filter "${state.executionFilter}"`);
+    return;
+  }
+  list.innerHTML = "";
+  for (const e of filtered) {
+    const div = document.createElement("div");
+    const selected = state.execution === e.id;
+    div.className = "row" + (selected ? " sel" : "");
+    div.setAttribute("role", "option");
+    div.setAttribute("tabindex", "-1");
+    div.setAttribute("aria-selected", selected ? "true" : "false");
+    div.innerHTML = `<div class="title mono">${esc(e.command?.raw ?? shortId(e.id))}</div>
+      <div class="meta">${badge(e.status)} · ${esc(e.started_at ?? "")}</div>`;
+    div.onclick = () => selectExecution(e.id);
+    list.appendChild(div);
+  }
+}
+
+/** Announce a message to screen readers via the aria-live region. */
+function announce(msg) {
+  const node = $("live-status");
+  if (!node) return;
+  node.textContent = "";
+  // Rebuilding the text in a microtask forces SR re-announcement.
+  setTimeout(() => { node.textContent = msg; }, 20);
+}
+
+/**
+ * Keyboard navigation for a listbox: ArrowUp/Down walks rows, Home/End
+ * jumps to ends, Enter / Space activates (calling the row's own onclick).
+ * Works in addition to the mouse path — the two never fight.
+ */
+function attachListboxKeys(listEl) {
+  listEl.addEventListener("keydown", (ev) => {
+    const rows = Array.from(listEl.querySelectorAll('[role="option"]'));
+    if (!rows.length) return;
+    const active = document.activeElement;
+    let idx = rows.indexOf(active);
+    if (idx < 0) {
+      // Fall back to the selected row if the listbox itself has focus.
+      idx = rows.findIndex((r) => r.getAttribute("aria-selected") === "true");
     }
-  } catch (e) { list.innerHTML = `<div class="empty">Error: ${e.message}</div>`; }
+    const move = (i) => {
+      ev.preventDefault();
+      const next = rows[Math.max(0, Math.min(rows.length - 1, i))];
+      next.focus();
+    };
+    if (ev.key === "ArrowDown") move(idx < 0 ? 0 : idx + 1);
+    else if (ev.key === "ArrowUp") move(idx < 0 ? 0 : idx - 1);
+    else if (ev.key === "Home") move(0);
+    else if (ev.key === "End") move(rows.length - 1);
+    else if (ev.key === "Enter" || ev.key === " ") {
+      if (idx >= 0) { ev.preventDefault(); rows[idx].click(); }
+    }
+  });
+}
+
+function matchesExecFilter(e, q) {
+  const needle = String(q || "").trim().toLowerCase();
+  if (!needle) return true;
+  const hay = (e.command?.raw || "") + " " + (e.id || "");
+  return hay.toLowerCase().includes(needle);
+}
+
+function resetTranscriptPane() {
+  if (terminalRenderer) { terminalRenderer.dispose(); terminalRenderer = null; }
+  $("terminal").replaceChildren();
+  $("transcript-fallback").hidden = true;
+  $("transcript-fallback").textContent = "";
+  $("transcript-head").innerHTML = '<div class="empty">Select an execution</div>';
+  $("transcript-search").style.display = "none";
+  $("transcript-filter").value = "";
+  state.fallbackText = "";
+  fallbackMatchIndex = -1;
 }
 
 async function selectExecution(id) {
@@ -178,8 +472,8 @@ async function selectExecution(id) {
   if (state.session) selectSessionHighlight();
   try {
     const { record, text, chunks } = await api(`/api/executions/${id}/transcript`);
-    $("transcript-head").innerHTML = `<div class="cmd">${(record.command?.raw ?? "").replace(/</g,"&lt;")}</div>
-      <div class="meta">${badge(record.status)} · ${record.started_at ?? ""}${record.ended_at ? " → " + record.ended_at : ""}</div>`;
+    $("transcript-head").innerHTML = `<div class="cmd">${esc(record.command?.raw ?? "")}</div>
+      <div class="meta">${badge(record.status)} · ${esc(record.started_at ?? "")}${record.ended_at ? " → " + esc(record.ended_at) : ""}</div>`;
     if (record.command?.shell === "zsh" && window.Terminal) {
       if (terminalRenderer) terminalRenderer.dispose();
       terminalRenderer = new ZshTranscriptRenderer($("terminal"));
@@ -188,6 +482,7 @@ async function selectExecution(id) {
     } else {
       showFallback(text);
     }
+    $("transcript-search").style.display = "flex";
   } catch (e) { showFallback("Error: " + e.message); }
 }
 function showFallback(text) {
@@ -195,25 +490,105 @@ function showFallback(text) {
   $("terminal").replaceChildren();
   $("transcript-fallback").hidden = false;
   $("transcript-fallback").textContent = text || "(no output recorded)";
+  state.fallbackText = text || "";
+}
+
+// ----- Transcript search -----
+//
+// Two render paths: xterm (zsh transcripts) uses xterm-addon-search's
+// findNext/findPrevious with highlighting; the <pre> fallback path does a
+// browser-side substring hop that scrolls the first/next match into view.
+function transcriptQuery() { return $("transcript-filter").value || ""; }
+let fallbackMatchIndex = -1;
+function findInTranscript(dir) {
+  const q = transcriptQuery();
+  if (!q) return;
+  if (terminalRenderer && terminalRenderer.search) {
+    const opts = { incremental: false, decorations: { matchBackground: "#e6b955" } };
+    if (dir === "prev") terminalRenderer.search.findPrevious(q, opts);
+    else terminalRenderer.search.findNext(q, opts);
+    return;
+  }
+  const pre = $("transcript-fallback");
+  if (pre.hidden) return;
+  const text = state.fallbackText || pre.textContent || "";
+  const low = text.toLowerCase();
+  const needle = q.toLowerCase();
+  if (!needle) return;
+  let next;
+  if (dir === "prev") {
+    const from = fallbackMatchIndex > 0 ? fallbackMatchIndex - 1 : text.length;
+    next = low.lastIndexOf(needle, from);
+    if (next < 0) next = low.lastIndexOf(needle);
+  } else {
+    const from = fallbackMatchIndex >= 0 ? fallbackMatchIndex + 1 : 0;
+    next = low.indexOf(needle, from);
+    if (next < 0) next = low.indexOf(needle);
+  }
+  if (next < 0) return;
+  fallbackMatchIndex = next;
+  // Scroll the match into view: compute approximate y by splitting on \n.
+  const line = text.slice(0, next).split("\n").length - 1;
+  const lineHeight = parseFloat(getComputedStyle(pre).lineHeight) || 18;
+  pre.scrollTo({ top: Math.max(0, line * lineHeight - pre.clientHeight / 2), behavior: "smooth" });
 }
 
 class ZshTranscriptRenderer {
   constructor(container) {
+    this.container = container;
     this.terminal = new Terminal({
       convertEol: false,
       cursorBlink: false,
       disableStdin: true,
       scrollback: 10000,
-      theme: { background: "#0f1115", foreground: "#c8d0da" }
+      theme: termTheme(),
     });
+    this.fit = (window.FitAddon && window.FitAddon.FitAddon)
+      ? new window.FitAddon.FitAddon()
+      : null;
+    if (this.fit) this.terminal.loadAddon(this.fit);
+    this.search = (window.SearchAddon && window.SearchAddon.SearchAddon)
+      ? new window.SearchAddon.SearchAddon()
+      : null;
+    if (this.search) this.terminal.loadAddon(this.search);
     this.terminal.open(container);
+    this.safeFit();
+    // The fit addon measures the container; re-fit on viewport resize so the
+    // terminal keeps filling after the user drags the window.
+    this.onResize = () => this.safeFit();
+    window.addEventListener("resize", this.onResize);
+  }
+  safeFit() {
+    if (!this.fit) return;
+    try { this.fit.fit(); } catch (_) { /* container not yet laid out */ }
   }
   render(chunks) {
     for (const chunk of chunks) {
       if (chunk.kind !== "stdin") this.terminal.write(base64Bytes(chunk.data));
     }
+    // Fit again after content lands so scrollback sizing picks up the new rows.
+    requestAnimationFrame(() => this.safeFit());
   }
-  dispose() { this.terminal.dispose(); }
+  applyTheme() {
+    // xterm supports swapping the theme after construction; keep the host
+    // background in sync too in case there's a rendering gap during reflow.
+    const t = termTheme();
+    this.terminal.options.theme = t;
+    if (this.container) this.container.style.background = t.background;
+  }
+  dispose() {
+    if (this.onResize) window.removeEventListener("resize", this.onResize);
+    this.terminal.dispose();
+  }
+}
+
+/** Current terminal theme object, kept close to the CSS palette. */
+function termTheme() {
+  const styles = getComputedStyle(document.documentElement);
+  return {
+    background: styles.getPropertyValue("--term-bg").trim() || "#0f1115",
+    foreground: styles.getPropertyValue("--term-fg").trim() || "#c8d0da",
+  };
 }
 function base64Bytes(value) {
   const binary = atob(value);
@@ -226,6 +601,33 @@ function selectSessionHighlight() {
 }
 
 $("refresh").onclick = () => { loadSessions(); if (state.session) selectSession(state.session); };
+$("theme-toggle").onclick = cycleTheme;
+
+// Live filter inputs — "input" fires per-keystroke, including when the user
+// clicks the native clear (×) button on <input type="search">.
+$("sessions-filter").addEventListener("input", (ev) => {
+  state.sessionFilter = ev.target.value;
+  renderSessions();
+});
+$("executions-filter").addEventListener("input", (ev) => {
+  state.executionFilter = ev.target.value;
+  renderExecutions();
+});
+// Keyboard nav on the two listboxes.
+attachListboxKeys($("sessions-list"));
+attachListboxKeys($("executions-list"));
+// Transcript find: Enter = next, Shift+Enter = previous, matches the de-facto
+// browser find dialog convention.
+$("transcript-filter").addEventListener("keydown", (ev) => {
+  if (ev.key === "Enter") {
+    ev.preventDefault();
+    findInTranscript(ev.shiftKey ? "prev" : "next");
+  }
+});
+$("transcript-prev").onclick = () => findInTranscript("prev");
+$("transcript-next").onclick = () => findInTranscript("next");
+$("transcript-search").style.display = "none";
+
 loadSessions();
 </script>
 </body>
