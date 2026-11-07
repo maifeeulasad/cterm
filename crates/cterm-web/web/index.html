@@ -238,7 +238,17 @@ async function loadSessions() {
 }
 
 async function selectSession(id) {
-  state.session = id; loadSessions();
+  // Fresh session click clears the previously-chosen execution and the
+  // right-pane transcript — without this, switching sessions left the old
+  // execution looking "still selected" and showed stale output until the
+  // user clicked a new execution.
+  const sessionChanged = state.session !== id;
+  state.session = id;
+  if (sessionChanged) {
+    state.execution = null;
+    resetTranscriptPane();
+  }
+  loadSessions();
   const list = $("executions-list");
   list.innerHTML = '<div class="empty">Loading…</div>';
   try {
@@ -254,6 +264,14 @@ async function selectSession(id) {
       list.appendChild(div);
     }
   } catch (e) { list.innerHTML = `<div class="empty">Error: ${e.message}</div>`; }
+}
+
+function resetTranscriptPane() {
+  if (terminalRenderer) { terminalRenderer.dispose(); terminalRenderer = null; }
+  $("terminal").replaceChildren();
+  $("transcript-fallback").hidden = true;
+  $("transcript-fallback").textContent = "";
+  $("transcript-head").innerHTML = '<div class="empty">Select an execution</div>';
 }
 
 async function selectExecution(id) {
