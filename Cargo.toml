@@ -5,6 +5,7 @@
 #
 #   cterm-core     domain model: sessions, executions, streams, status, traits.
 #   cterm-proto    gRPC/protobuf contract (tonic) — the agent-facing wire API.
+#   cterm-ipc      shim↔daemon IPC protocol + length-delimited framing.
 #   cterm-storage  persistence of execution records (SQLite).
 #   cterm-daemon   the collector: IPC server + gRPC server + storage.
 #   cterm-shim     the shell shim that runs under the real shell via a PTY.
