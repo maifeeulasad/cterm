@@ -1,10 +1,32 @@
-# cterm v0.4.0
+# cterm v0.4.1
 
 A terminal integration / shim tool that lets agents observe, record, stream, and
 drive shell command executions **without ever holding the credentials used to
 open the session**.
 
 > Early release. Tri-platform; shared for feedback. Expect rough edges.
+
+## 0.4.1 — tool-callable CLI over gRPC
+
+- **`cterm execute [--id <session>] <COMMAND>`** (alias `exec`) — a regular
+  shell-shaped front door to the daemon's `Terminal.Run` RPC (issue #24).
+  Tool-calling clients no longer need `tonic`/`grpcurl`/`protoc`: spawn
+  `cterm execute …`, read stdout/stderr, exit on the command's own exit code
+  (128+signal on interrupt, 1 on failure). Flags mirror the proto
+  `RunRequest` (`--session/--id`, `--addr`, `--program`, `--arg`, `--cwd`,
+  `--rows`, `--cols`). `--json` emits one NDJSON event per line with
+  base64-encoded chunks for machine consumers; `--quiet` suppresses chunk
+  output and reports only the final status.
+- **proto**: `Session.status` is now a typed enum (`ACTIVE` / `CLOSED` /
+  `DROPPED`) on the wire. Previously a free-form string; `Status.Kind` on
+  the same service was already an enum, so this removes an inconsistency and
+  the risk of typos on either side.
+- **docs**: the workspace's own top-of-file layering comment now lists
+  `cterm-ipc` alongside the other crates.
+- **deps**: lockfile bump of the `pulldown-cmark` build-dep (pulled in
+  transitively by `prost-build`) to 0.13.6 so `cargo audit` on CI stops
+  flagging RUSTSEC-2026-0433. The advisory concerns `ENABLE_WIKILINKS`,
+  which the build never sets.
 
 ## 0.4.0 — self-serving commands
 
