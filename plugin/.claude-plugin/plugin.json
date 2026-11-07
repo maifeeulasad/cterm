@@ -11,6 +11,7 @@
   "homepage": "https://github.com/maifeeulasad/cterm",
   "repository": "https://github.com/maifeeulasad/cterm",
   "license": "GPL-3.0-or-later",
+  "icon": "./.claude-plugin/icon.png",
   "keywords": [
     "terminal",
     "shell",
