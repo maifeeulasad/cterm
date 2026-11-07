@@ -2,7 +2,7 @@
   "$schema": "https://code.claude.com/schemas/plugin.json",
   "name": "cterm",
   "displayName": "cterm",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "description": "Run and observe shell executions through the local cterm daemon so they are recorded, streamable, and replayable — without the agent holding SSH keys.",
   "author": {
     "name": "Maifee Ul Asad",
@@ -23,5 +23,7 @@
     "cterm"
   ],
   "documentationUrl": "https://github.com/maifeeulasad/cterm/tree/main/docs/claude-plugin",
-  "supportUrl": "https://github.com/maifeeulasad/cterm/issues"
+  "supportUrl": "https://github.com/maifeeulasad/cterm/issues",
+  "privacyPolicyUrl": "https://github.com/maifeeulasad/cterm/blob/main/PRIVACY.md",
+  "termsOfServiceUrl": "https://github.com/maifeeulasad/cterm/blob/main/TERMS.md"
 }
