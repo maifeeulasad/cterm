@@ -1,10 +1,46 @@
-# cterm v0.6.1
+# cterm v0.7.0
 
 A terminal integration / shim tool that lets agents observe, record, stream, and
 drive shell command executions **without ever holding the credentials used to
 open the session**.
 
 > Early release. Tri-platform; shared for feedback. Expect rough edges.
+
+## 0.7.0 — cterm-web UX pass
+
+All five items from [#32](https://github.com/maifeeulasad/cterm/issues/32).
+Web-only; no daemon, CLI, or wire-format changes.
+
+- **Transcript fills the viewport**: pulled in `xterm-addon-fit` and
+  wired it on render + window resize + chunk flush. `html, body` get
+  `height: 100%` so the outer flex column has a real height to divide,
+  with `100dvh` fallback for mobile browser chrome collapse/expand.
+- **Light mode + auto system/browser sync**: tri-state theme (system /
+  light / dark) toggled from a header button, persisted in
+  `localStorage`. The default picks the OS palette via `@media
+  (prefers-color-scheme: light)`; explicit `data-theme` on `:root`
+  overrides it. `color-scheme` on `:root` updates native scrollbars and
+  form controls to match. xterm re-themes live via a CSS-variable
+  bridge, so a theme flip doesn't need a transcript reload.
+- **Search everywhere**:
+  - Sessions: substring match over title / id / host / shell plus
+    labels, with a term shaped as `key=value` as an exact label match.
+    Space-separated terms AND together.
+  - Executions: substring match over the raw command.
+  - Transcript: `xterm-addon-search` for zsh transcripts (highlight +
+    next/previous); scroll-into-view hop for the fallback `<pre>`.
+    Enter = next, Shift+Enter = previous.
+- **Selection bug fixed**: clicking a new session now clears
+  `state.execution` and the right-hand transcript pane — before, the
+  old execution kept looking selected and showed stale output until
+  the user clicked something new.
+- **Accessibility pass**: landmarks (`<header>`, `<main>`, two
+  `<nav>`s, `<section>`), ARIA listbox/option on the two lists with
+  `aria-selected` mirrored from the visual state, keyboard navigation
+  (↑/↓/Home/End/Enter), a skip-link, visible `:focus-visible` rings
+  tied to the theme, buttons as `type="button"`, a polite `aria-live`
+  region that announces empty-filter results, and
+  `prefers-reduced-motion` disables the smooth-scroll + transitions.
 
 ## 0.6.1 — Claude plugin + docs refresh for 0.6.0 features
 
