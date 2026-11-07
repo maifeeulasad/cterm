@@ -9,12 +9,16 @@
     --bg: #0f1115; --panel: #171a21; --border: #262b36; --fg: #d7dce3;
     --muted: #8b94a3; --accent: #5aa9e6; --ok: #57c785; --warn: #e6b955;
     --bad: #e06c75; --sel: #223049;
+    --term-bg: #0f1115; --term-fg: #c8d0da;
   }
   * { box-sizing: border-box; }
+  html, body { height: 100%; }
   body {
     margin: 0; background: var(--bg); color: var(--fg);
     font: 14px/1.45 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-    height: 100vh; display: flex; flex-direction: column;
+    /* dvh handles mobile browser chrome collapse/expand; vh is the fallback */
+    height: 100vh; height: 100dvh;
+    display: flex; flex-direction: column;
   }
   header {
     padding: 10px 16px; border-bottom: 1px solid var(--border);
@@ -68,14 +72,19 @@
   }
   #transcript-head .meta { color: var(--muted); font-size: 12px; margin-top: 4px; }
   #terminal {
-    flex: 1; min-height: 0; padding: 14px 16px; overflow: hidden;
-    background: #0f1115;
+    flex: 1 1 0%; min-height: 0; padding: 14px 16px; overflow: hidden;
+    background: var(--term-bg);
   }
-  #terminal .xterm { height: 100%; }
+  /* xterm.js needs its direct children to fill the host so the fit addon
+     can measure them correctly — otherwise the terminal renders at its
+     default rows/cols and leaves the bottom of the viewport empty. */
+  #terminal .xterm, #terminal .xterm-viewport,
+  #terminal .xterm-screen { height: 100% !important; width: 100% !important; }
   pre#transcript-fallback {
-    flex: 1; margin: 0; padding: 14px 16px; overflow: auto; white-space: pre-wrap;
-    word-break: break-word; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-    font-size: 13px; color: #c8d0da;
+    flex: 1 1 0%; min-height: 0; margin: 0; padding: 14px 16px; overflow: auto;
+    white-space: pre-wrap; word-break: break-word;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 13px; color: var(--term-fg); background: var(--term-bg);
   }
   .empty { color: var(--muted); padding: 14px; font-style: italic; }
 </style>
@@ -98,6 +107,7 @@
 </main>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.min.css">
 <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"></script>
 <script>
 const $ = (id) => document.getElementById(id);
 let state = { session: null, execution: null };
@@ -204,16 +214,43 @@ class ZshTranscriptRenderer {
       cursorBlink: false,
       disableStdin: true,
       scrollback: 10000,
-      theme: { background: "#0f1115", foreground: "#c8d0da" }
+      theme: termTheme(),
     });
+    this.fit = (window.FitAddon && window.FitAddon.FitAddon)
+      ? new window.FitAddon.FitAddon()
+      : null;
+    if (this.fit) this.terminal.loadAddon(this.fit);
     this.terminal.open(container);
+    this.safeFit();
+    // The fit addon measures the container; re-fit on viewport resize so the
+    // terminal keeps filling after the user drags the window.
+    this.onResize = () => this.safeFit();
+    window.addEventListener("resize", this.onResize);
+  }
+  safeFit() {
+    if (!this.fit) return;
+    try { this.fit.fit(); } catch (_) { /* container not yet laid out */ }
   }
   render(chunks) {
     for (const chunk of chunks) {
       if (chunk.kind !== "stdin") this.terminal.write(base64Bytes(chunk.data));
     }
+    // Fit again after content lands so scrollback sizing picks up the new rows.
+    requestAnimationFrame(() => this.safeFit());
   }
-  dispose() { this.terminal.dispose(); }
+  dispose() {
+    if (this.onResize) window.removeEventListener("resize", this.onResize);
+    this.terminal.dispose();
+  }
+}
+
+/** Current terminal theme object, kept close to the CSS palette. */
+function termTheme() {
+  const styles = getComputedStyle(document.documentElement);
+  return {
+    background: styles.getPropertyValue("--term-bg").trim() || "#0f1115",
+    foreground: styles.getPropertyValue("--term-fg").trim() || "#c8d0da",
+  };
 }
 function base64Bytes(value) {
   const binary = atob(value);
