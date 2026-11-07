@@ -118,6 +118,20 @@ same gRPC API. Browse records with `cterm-web` (`http://127.0.0.1:8088`).
 gRPC addr), `CTERM_SOCK` (shim↔daemon IPC socket/pipe), `CTERM_WEB_ADDR`
 (cterm-web addr), `CTERM_FORCE_RECORD` (record non-interactive shim calls too).
 
+## Authentication (opt-in)
+
+The daemon listens on loopback and, by default, accepts any local caller.
+Multi-user hosts, container hosts, or defense-in-depth setups can turn on
+a shared bearer token kept in the OS keyring:
+
+```bash
+cterm auth enable                     # stores a fresh token
+CTERM_AUTH=on cterm-daemon            # enforces it on every RPC
+```
+
+Full flow (token precedence, rotation, `CTERM_AUTH_TOKEN` escape hatch for
+headless hosts, status/disable) is in [docs/auth.md](docs/auth.md).
+
 ## Session metadata
 
 Sessions can carry an optional one-line `title` and a small map of `labels`

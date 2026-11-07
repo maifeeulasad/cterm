@@ -196,13 +196,14 @@ dependencies = [
 
 [[package]]
 name = "cterm-cli"
-version = "0.5.2"
+version = "0.6.0"
 dependencies = [
  "cterm-core",
  "cterm-ipc",
  "cterm-proto",
  "cterm-shim",
  "cterm-storage",
+ "keyring",
  "nix 0.31.3",
  "self-replace",
  "serde",
@@ -212,12 +213,13 @@ dependencies = [
  "thiserror 2.0.21",
  "tokio",
  "tonic",
+ "uuid",
  "windows-sys",
 ]
 
 [[package]]
 name = "cterm-core"
-version = "0.5.2"
+version = "0.6.0"
 dependencies = [
  "async-trait",
  "serde",
@@ -229,7 +231,7 @@ dependencies = [
 
 [[package]]
 name = "cterm-daemon"
-version = "0.5.2"
+version = "0.6.0"
 dependencies = [
  "async-stream",
  "async-trait",
@@ -247,7 +249,7 @@ dependencies = [
 
 [[package]]
 name = "cterm-ipc"
-version = "0.5.2"
+version = "0.6.0"
 dependencies = [
  "cterm-core",
  "serde",
@@ -257,7 +259,7 @@ dependencies = [
 
 [[package]]
 name = "cterm-proto"
-version = "0.5.2"
+version = "0.6.0"
 dependencies = [
  "cterm-core",
  "prost",
@@ -269,7 +271,7 @@ dependencies = [
 
 [[package]]
 name = "cterm-shim"
-version = "0.5.2"
+version = "0.6.0"
 dependencies = [
  "cterm-core",
  "cterm-storage",
@@ -280,7 +282,7 @@ dependencies = [
 
 [[package]]
 name = "cterm-storage"
-version = "0.5.2"
+version = "0.6.0"
 dependencies = [
  "async-trait",
  "cterm-core",
@@ -292,7 +294,7 @@ dependencies = [
 
 [[package]]
 name = "cterm-web"
-version = "0.5.2"
+version = "0.6.0"
 dependencies = [
  "axum",
  "cterm-core",
@@ -674,6 +676,16 @@ dependencies = [
  "cfg-if",
  "futures-util",
  "wasm-bindgen",
+]
+
+[[package]]
+name = "keyring"
+version = "3.6.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "eebcc3aff044e5944a8fbaf69eb277d11986064cba30c468730e8b9909fb551c"
+dependencies = [
+ "log",
+ "zeroize",
 ]
 
 [[package]]
@@ -1667,6 +1679,12 @@ checksum = "80d0f4e272c85def139476380b12f9ac60926689dd2e01d4923222f40580869d"
 dependencies = [
  "winapi",
 ]
+
+[[package]]
+name = "zeroize"
+version = "1.9.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e13084392c5e4bc371903e2935a5eaeed24905a7511356b883835e18a78f6879"
 
 [[package]]
 name = "zmij"
