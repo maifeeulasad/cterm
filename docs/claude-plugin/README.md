@@ -23,15 +23,18 @@ The plugin lives in [plugin/](../../plugin/) at the repo root.
 
 | Component                | What it gives Claude                                                  |
 | ------------------------ | --------------------------------------------------------------------- |
-| `skills/cterm/SKILL.md`  | Teaches Claude when to reach for `cterm execute` in place of `Bash`. |
-| `commands/exec.md`       | `/cterm:exec <command>` — run through the daemon, stream output.      |
-| `commands/sessions.md`   | `/cterm:sessions` — list the daemon's known sessions.                 |
+| `skills/cterm/SKILL.md`  | Teaches Claude when to reach for `cterm execute` in place of `Bash`, when to name a session (0.6.0 `--title` / `--label`), and how to handle `UNAUTHENTICATED` from an auth-enabled daemon. |
+| `commands/exec.md`       | `/cterm:exec [--id <id>] [--title <t>] [--label k=v] <command>` — run through the daemon, stream output. |
+| `commands/sessions.md`   | `/cterm:sessions` — list the daemon's known sessions, with any titles/labels they carry. |
 | `commands/tail.md`       | `/cterm:tail <execution-id>` — replay + tail an execution.            |
 
 Every command is a thin wrapper around the `cterm execute` CLI added in
 0.4.1 (issue [#24](https://github.com/maifeeulasad/cterm/issues/24)), so the
 plugin itself installs **no new code on the user's machine** — it only tells
-Claude how to use the binaries they already have.
+Claude how to use the binaries they already have. When the operator turns on
+[daemon bearer-token auth](../auth.md) (0.6.0, issue
+[#27](https://github.com/maifeeulasad/cterm/issues/27)), the token is picked
+up from `CTERM_AUTH_TOKEN` or the OS keyring; no plugin change needed.
 
 ## Three ways to use it
 
