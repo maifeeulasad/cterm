@@ -1,6 +1,5 @@
 ---
-description: List the sessions the cterm daemon currently knows about.
-allowed-tools: Bash(cterm:*)
+description: "List the sessions the cterm daemon currently knows about."
 ---
 
 The user wants to see the terminal sessions currently tracked by the cterm

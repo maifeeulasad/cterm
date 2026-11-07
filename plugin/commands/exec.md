@@ -1,7 +1,6 @@
 ---
-description: Run a shell command through the local cterm daemon so it is recorded, streamable, and replayable.
-argument-hint: [--id <session-id>] <command>
-allowed-tools: Bash(cterm:*), Bash(cterm-daemon:*)
+description: "Run a shell command through the local cterm daemon so it is recorded, streamable, and replayable."
+argument-hint: "[--id <session-id>] <command>"
 ---
 
 The user asked you to run a shell command through the cterm daemon. Do

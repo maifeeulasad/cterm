@@ -1,7 +1,6 @@
 ---
-description: Replay a stored execution and then follow it live if still running.
-argument-hint: <execution-id>
-allowed-tools: Bash(cterm:*)
+description: "Replay a stored execution and then follow it live if still running."
+argument-hint: "<execution-id>"
 ---
 
 The user wants to watch an existing execution — either one a human started
