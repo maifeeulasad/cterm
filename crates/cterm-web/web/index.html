@@ -5,11 +5,38 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>cterm</title>
 <style>
+  /* Dark palette (default). */
   :root {
     --bg: #0f1115; --panel: #171a21; --border: #262b36; --fg: #d7dce3;
     --muted: #8b94a3; --accent: #5aa9e6; --ok: #57c785; --warn: #e6b955;
     --bad: #e06c75; --sel: #223049;
+    --label-bg: #1f2937; --label-fg: #a5b4fc;
     --term-bg: #0f1115; --term-fg: #c8d0da;
+    --focus: #8ab4f8;
+    color-scheme: dark;
+  }
+  /* Auto light palette when the OS/browser asks for it, unless the user
+     explicitly picked a theme (data-theme="dark" wins the cascade). */
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) {
+      --bg: #ffffff; --panel: #f6f8fa; --border: #d0d7de; --fg: #1f2328;
+      --muted: #57606a; --accent: #0969da; --ok: #1a7f37; --warn: #9a6700;
+      --bad: #cf222e; --sel: #ddf4ff;
+      --label-bg: #ddf4ff; --label-fg: #0550ae;
+      --term-bg: #ffffff; --term-fg: #1f2328;
+      --focus: #0969da;
+      color-scheme: light;
+    }
+  }
+  /* Explicit opt-in via the header toggle (overrides prefers-color-scheme). */
+  :root[data-theme="light"] {
+    --bg: #ffffff; --panel: #f6f8fa; --border: #d0d7de; --fg: #1f2328;
+    --muted: #57606a; --accent: #0969da; --ok: #1a7f37; --warn: #9a6700;
+    --bad: #cf222e; --sel: #ddf4ff;
+    --label-bg: #ddf4ff; --label-fg: #0550ae;
+    --term-bg: #ffffff; --term-fg: #1f2328;
+    --focus: #0969da;
+    color-scheme: light;
   }
   * { box-sizing: border-box; }
   html, body { height: 100%; }
@@ -27,11 +54,14 @@
   header h1 { font-size: 15px; margin: 0; letter-spacing: .5px; }
   header .sub { color: var(--muted); font-size: 12px; }
   header button {
-    margin-left: auto; background: var(--sel); color: var(--fg);
+    background: var(--sel); color: var(--fg);
     border: 1px solid var(--border); border-radius: 6px; padding: 5px 10px;
     cursor: pointer; font-size: 12px;
   }
   header button:hover { border-color: var(--accent); }
+  /* First button in the header gets the "push to the right" margin so the
+     toggle set hugs the right edge without each button needing to know. */
+  header button:first-of-type { margin-left: auto; }
   main { flex: 1; display: grid; grid-template-columns: 260px 320px 1fr; min-height: 0; }
   .col { border-right: 1px solid var(--border); overflow-y: auto; min-height: 0; }
   .col h2 {
@@ -51,8 +81,8 @@
     padding: 1px 6px;
     margin-right: 4px;
     border-radius: 3px;
-    background: #eef2ff;
-    color: #3730a3;
+    background: var(--label-bg);
+    color: var(--label-fg);
     font-family: ui-monospace, Menlo, Consolas, monospace;
     font-size: 11px;
   }
@@ -93,7 +123,9 @@
 <header>
   <h1>cterm</h1>
   <span class="sub">recorded terminal sessions</span>
-  <button id="refresh">Refresh</button>
+  <button id="theme-toggle" type="button" aria-label="Toggle color theme"
+    title="Toggle light / dark / system theme">theme</button>
+  <button id="refresh" type="button">Refresh</button>
 </header>
 <main>
   <div class="col" id="sessions"><h2>Sessions</h2><div id="sessions-list"></div></div>
@@ -112,6 +144,47 @@
 const $ = (id) => document.getElementById(id);
 let state = { session: null, execution: null };
 let terminalRenderer = null;
+
+// ----- Theme (tri-state: system / light / dark) -----
+//
+// Persisted in localStorage under "cterm.theme". When unset ("system"),
+// CSS's @media (prefers-color-scheme) wins. Explicit light/dark pins
+// the palette via data-theme on <html>.
+const THEME_KEY = "cterm.theme";
+const THEME_CYCLE = ["system", "light", "dark"];
+
+function readTheme() {
+  try { return localStorage.getItem(THEME_KEY) || "system"; }
+  catch (_) { return "system"; }
+}
+function applyTheme(choice) {
+  if (choice === "system") document.documentElement.removeAttribute("data-theme");
+  else document.documentElement.setAttribute("data-theme", choice);
+  const btn = $("theme-toggle");
+  if (btn) {
+    const nextIndex = (THEME_CYCLE.indexOf(choice) + 1) % THEME_CYCLE.length;
+    btn.textContent = `theme: ${choice}`;
+    btn.setAttribute("aria-label",
+      `Current theme: ${choice}. Click to switch to ${THEME_CYCLE[nextIndex]}.`);
+  }
+  // Re-theme an already-mounted terminal so xterm picks the new palette.
+  if (terminalRenderer && terminalRenderer.applyTheme) terminalRenderer.applyTheme();
+}
+function cycleTheme() {
+  const next = THEME_CYCLE[(THEME_CYCLE.indexOf(readTheme()) + 1) % THEME_CYCLE.length];
+  try { localStorage.setItem(THEME_KEY, next); } catch (_) {}
+  applyTheme(next);
+}
+// System theme changes (user flips dark mode in the OS) refresh xterm too.
+if (window.matchMedia) {
+  window.matchMedia("(prefers-color-scheme: dark)")
+    .addEventListener("change", () => {
+      if (readTheme() === "system" && terminalRenderer && terminalRenderer.applyTheme) {
+        terminalRenderer.applyTheme();
+      }
+    });
+}
+applyTheme(readTheme());
 
 async function api(path) {
   const r = await fetch(path);
@@ -209,6 +282,7 @@ function showFallback(text) {
 
 class ZshTranscriptRenderer {
   constructor(container) {
+    this.container = container;
     this.terminal = new Terminal({
       convertEol: false,
       cursorBlink: false,
@@ -238,6 +312,13 @@ class ZshTranscriptRenderer {
     // Fit again after content lands so scrollback sizing picks up the new rows.
     requestAnimationFrame(() => this.safeFit());
   }
+  applyTheme() {
+    // xterm supports swapping the theme after construction; keep the host
+    // background in sync too in case there's a rendering gap during reflow.
+    const t = termTheme();
+    this.terminal.options.theme = t;
+    if (this.container) this.container.style.background = t.background;
+  }
   dispose() {
     if (this.onResize) window.removeEventListener("resize", this.onResize);
     this.terminal.dispose();
@@ -263,6 +344,7 @@ function selectSessionHighlight() {
 }
 
 $("refresh").onclick = () => { loadSessions(); if (state.session) selectSession(state.session); };
+$("theme-toggle").onclick = cycleTheme;
 loadSessions();
 </script>
 </body>
