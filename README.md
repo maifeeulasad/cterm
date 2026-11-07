@@ -118,6 +118,15 @@ same gRPC API. Browse records with `cterm-web` (`http://127.0.0.1:8088`).
 gRPC addr), `CTERM_SOCK` (shim↔daemon IPC socket/pipe), `CTERM_WEB_ADDR`
 (cterm-web addr), `CTERM_FORCE_RECORD` (record non-interactive shim calls too).
 
+## Claude plugin
+
+cterm ships as a [Claude plugin](docs/claude-plugin/README.md) in [plugin/](plugin/),
+with a skill plus three slash commands (`/cterm:exec`, `/cterm:sessions`,
+`/cterm:tail`) that drive the daemon through `cterm execute`. Install via
+`/plugin marketplace add maifeeulasad/cterm` in Claude Code, or upload the
+zipped folder from claude.ai > Customize > Plugins. See
+[docs/claude-plugin/installing.md](docs/claude-plugin/installing.md).
+
 ## Building
 
 Requires a Rust toolchain and `protoc`. On Ubuntu:

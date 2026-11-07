@@ -22,7 +22,5 @@
     "cterm"
   ],
   "documentationUrl": "https://github.com/maifeeulasad/cterm/tree/main/docs/claude-plugin",
-  "supportUrl": "https://github.com/maifeeulasad/cterm/issues",
-  "commands": "./commands/",
-  "skills": "./skills/"
+  "supportUrl": "https://github.com/maifeeulasad/cterm/issues"
 }
