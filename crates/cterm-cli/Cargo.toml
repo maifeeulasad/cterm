@@ -28,7 +28,7 @@ self-replace = "1"
 # OS-native secret storage: macOS Keychain, Windows Credential Manager, Linux
 # Secret Service (GNOME Keyring / KWallet). Default features use whatever the
 # target OS provides; no mock backend in the shipped binary.
-keyring = "3"
+keyring = "4"
 uuid.workspace = true
 
 [target.'cfg(unix)'.dependencies]
