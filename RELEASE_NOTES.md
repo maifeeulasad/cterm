@@ -1,10 +1,31 @@
-# cterm v0.7.1
+# cterm v0.8.0
 
 A terminal integration / shim tool that lets agents observe, record, stream, and
 drive shell command executions **without ever holding the credentials used to
 open the session**.
 
 > Early release. Tri-platform; shared for feedback. Expect rough edges.
+
+## 0.8.0 — terminal registration, cross-platform default shell, dependency refresh
+
+- **`cterm register`** — register a cterm shim as a terminal *profile* so a
+  human opens a recorded interactive shell (the hybrid flow), instead of
+  reaching for `cterm execute`. On Windows it writes a Windows Terminal profile
+  fragment (`--print` previews, `--remove` deletes); on macOS/Linux it prints
+  the profile settings (command = shim, preserve cwd, exit-on-exit) to paste
+  into your emulator. See [docs/register.md](docs/register.md). (issue #26)
+- **Cross-platform daemon default shell.** The daemon's `Run` hardcoded
+  `/bin/bash -lc <command>` on every OS, so a bare run on Windows had no usable
+  shell. The choice is now a port (`cterm_core::shell::CommandShell`) with one
+  implementation per platform — `/bin/bash -lc` on Unix, `cmd /C` on Windows —
+  selected by `host_default()`, so new platforms slot in without `cfg` at the
+  call site.
+- **Dependency refresh.** sha2 0.10→0.11, keyring 3→4, rusqlite 0.40→0.42, plus
+  a transitive-patch group (Dependabot #34/#36/#37/#38). rustix bumped to 1.1.6
+  to clear an unsound advisory (RUSTSEC-2026-0486). keyring 4's Secret Service
+  store pulls zbus 5, whose now-unmaintained `zvariant`/`zbus_names`/
+  `zvariant_derive` (merged into zbus 6 upstream) are ignored in the audit with
+  a documented, scoped note until keyring adopts zbus 6.
 
 ## 0.7.1 — Windows install docs
 
