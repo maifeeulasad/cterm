@@ -30,7 +30,7 @@ use cterm_core::capture::{CaptureSource, Platform, SourceId};
 /// [`for_platform`] to find the ones usable here.
 #[must_use]
 pub fn catalog() -> Vec<Box<dyn CaptureSource>> {
-    vec![sources::bash(), sources::zsh()]
+    vec![sources::bash(), sources::zsh(), sources::cmd()]
 }
 
 /// The catalog sources that apply to `platform`.
@@ -72,7 +72,9 @@ mod tests {
     }
 
     #[test]
-    fn windows_has_no_shell_hooks_yet() {
-        assert!(for_platform(Platform::Windows).is_empty());
+    fn windows_has_the_cmd_source() {
+        let on_win = for_platform(Platform::Windows);
+        assert_eq!(on_win.len(), 1);
+        assert_eq!(on_win[0].info().id, SourceId::new("cmd-autorun"));
     }
 }

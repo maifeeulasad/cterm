@@ -8,7 +8,7 @@
 
 use cterm_core::capture::{
     Action, Availability, CaptureSource, EnablePlan, HostProbe, Layer, PlanStep, Privilege,
-    SourceId, SourceInfo,
+    RegistryHive, SourceId, SourceInfo,
 };
 use cterm_core::Platform;
 
@@ -202,6 +202,112 @@ pub fn zsh() -> Box<dyn CaptureSource> {
     })
 }
 
+/// Windows `cmd.exe` Command Processor AutoRun key — runs on every `cmd`,
+/// including `cmd /c`.
+const CMD_CP_KEY: &str = r"Software\Microsoft\Command Processor";
+const CMD_AUTORUN: &str = "AutoRun";
+
+// `\r\n` line endings for a Windows batch file; `%CMDCMDLINE%` is the full
+// command line that launched this cmd (e.g. `cmd /c <command>`), so this
+// captures the `cmd /c` invocations that bypass the shim.
+const CMD_HOOK: &str = "@echo off\r\n\
+cterm capture emit --shell cmd --command \"%CMDCMDLINE%\" --cwd \"%CD%\" >nul 2>&1\r\n";
+
+/// The cmd capture source: registers a Command Processor `AutoRun` entry
+/// ([`Layer::NonInteractiveHook`]). AutoRun fires on *every* cmd start incl.
+/// `cmd /c`, so it catches those bypass invocations; it cannot see individual
+/// commands typed in an interactive cmd session (cmd has no per-command hook).
+struct CmdAutoRunSource;
+
+impl CmdAutoRunSource {
+    fn hook_path(home: &str) -> String {
+        format!(r"{home}\.cterm\hooks\cmd-capture.cmd")
+    }
+}
+
+impl CaptureSource for CmdAutoRunSource {
+    fn info(&self) -> SourceInfo {
+        SourceInfo {
+            id: SourceId::new("cmd-autorun"),
+            title: "cmd AutoRun hook".to_owned(),
+            summary: "Command Processor AutoRun; catches `cmd /c` via %CMDCMDLINE% (per-user HKCU)"
+                .to_owned(),
+            platforms: vec![Platform::Windows],
+            layer: Layer::NonInteractiveHook,
+            privilege: Privilege::User,
+        }
+    }
+
+    fn availability(&self, probe: &dyn HostProbe) -> Availability {
+        match probe.platform() {
+            Some(Platform::Windows) if home(probe).is_some() => Availability::Available,
+            Some(Platform::Windows) => Availability::Unsupported {
+                reason: "USERPROFILE is not set".to_owned(),
+            },
+            _ => Availability::Unsupported {
+                reason: "cmd AutoRun is Windows-only".to_owned(),
+            },
+        }
+    }
+
+    fn enable_plan(&self, probe: &dyn HostProbe) -> EnablePlan {
+        let Some(home) = home(probe) else {
+            return EnablePlan::default();
+        };
+        let hook = Self::hook_path(&home);
+        EnablePlan::new(vec![
+            PlanStep::new(
+                "install the cmd AutoRun capture hook",
+                Action::WriteFile {
+                    path: hook.clone(),
+                    contents: CMD_HOOK.to_owned(),
+                },
+                false,
+            ),
+            PlanStep::new(
+                "register it via Command Processor AutoRun (HKCU)",
+                Action::SetRegistryValue {
+                    hive: RegistryHive::CurrentUser,
+                    key: CMD_CP_KEY.to_owned(),
+                    name: CMD_AUTORUN.to_owned(),
+                    value: format!("\"{hook}\""),
+                },
+                false,
+            ),
+        ])
+    }
+
+    fn disable_plan(&self, probe: &dyn HostProbe) -> EnablePlan {
+        let Some(home) = home(probe) else {
+            return EnablePlan::default();
+        };
+        EnablePlan::new(vec![
+            PlanStep::new(
+                "remove the Command Processor AutoRun value",
+                Action::DeleteRegistryValue {
+                    hive: RegistryHive::CurrentUser,
+                    key: CMD_CP_KEY.to_owned(),
+                    name: CMD_AUTORUN.to_owned(),
+                },
+                false,
+            ),
+            PlanStep::new(
+                "remove the cmd AutoRun capture hook",
+                Action::RemoveFile {
+                    path: Self::hook_path(&home),
+                },
+                false,
+            ),
+        ])
+    }
+}
+
+/// The cmd capture source (Windows AutoRun). See [`CmdAutoRunSource`].
+#[must_use]
+pub fn cmd() -> Box<dyn CaptureSource> {
+    Box::new(CmdAutoRunSource)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -311,5 +417,55 @@ mod tests {
     fn zsh_is_interactive_layer() {
         assert_eq!(zsh().info().layer, Layer::InteractiveHook);
         assert_eq!(bash().info().layer, Layer::NonInteractiveHook);
+    }
+
+    fn windows_probe() -> FakeProbe {
+        FakeProbe {
+            platform: Some(Platform::Windows),
+            home: Some(r"C:\Users\me".into()),
+            programs: HashSet::new(),
+        }
+    }
+
+    #[test]
+    fn cmd_available_on_windows_and_registers_autorun() {
+        let probe = windows_probe();
+        assert_eq!(cmd().availability(&probe), Availability::Available);
+        let plan = cmd().enable_plan(&probe);
+        assert_eq!(plan.steps.len(), 2);
+        assert!(!plan.requires_elevation());
+        match &plan.steps[1].action {
+            Action::SetRegistryValue {
+                hive,
+                key,
+                name,
+                value,
+            } => {
+                assert_eq!(*hive, RegistryHive::CurrentUser);
+                assert!(key.ends_with("Command Processor"));
+                assert_eq!(name, "AutoRun");
+                assert!(value.contains("cmd-capture.cmd"));
+            }
+            other => panic!("expected registry set, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn cmd_unsupported_off_windows() {
+        let probe = linux_with("cmd");
+        assert!(matches!(
+            cmd().availability(&probe),
+            Availability::Unsupported { .. }
+        ));
+    }
+
+    #[test]
+    fn cmd_disable_removes_registry_and_file() {
+        let plan = cmd().disable_plan(&windows_probe());
+        assert!(matches!(
+            &plan.steps[0].action,
+            Action::DeleteRegistryValue { .. }
+        ));
+        assert!(matches!(&plan.steps[1].action, Action::RemoveFile { .. }));
     }
 }
