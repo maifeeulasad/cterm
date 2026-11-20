@@ -44,7 +44,8 @@ pub mod stream;
 // Re-export the common surface so downstream crates can `use cterm_core::*`.
 pub use auth::{deny, AuthVerifier, NoopVerifier};
 pub use capture::{
-    Availability, CommandEvent, EventKind, Layer, Platform, Privilege, SourceId, SourceInfo,
+    Availability, CaptureSource, CommandEvent, EnablePlan, EventKind, HostProbe, Layer, Platform,
+    Privilege, SourceId, SourceInfo,
 };
 pub use command::{Command, EnvVar};
 pub use error::{Error, Result};

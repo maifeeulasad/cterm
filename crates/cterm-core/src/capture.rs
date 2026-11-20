@@ -17,6 +17,9 @@
 use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;
 
+pub mod ports;
+pub use ports::{Action, CaptureSource, EnablePlan, HostProbe, PlanStep, RegistryHive};
+
 /// An operating system cterm can capture on.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
