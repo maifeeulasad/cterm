@@ -22,6 +22,7 @@ members = [
     "crates/cterm-cli",
     "crates/cterm-web",
     "crates/cterm-ipc",
+    "crates/cterm-capture",
 ]
 
 [workspace.package]

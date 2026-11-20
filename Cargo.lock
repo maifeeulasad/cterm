@@ -438,6 +438,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "cterm-capture"
+version = "0.8.1"
+dependencies = [
+ "cterm-core",
+ "nix 0.31.3",
+ "windows-sys",
+]
+
+[[package]]
 name = "cterm-cli"
 version = "0.8.1"
 dependencies = [
