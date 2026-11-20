@@ -76,6 +76,28 @@ pub enum Action {
         /// Arguments.
         args: Vec<String>,
     },
+    /// Delete a file (undoing a [`Action::WriteFile`]).
+    RemoveFile {
+        /// Path to delete; a missing file is not an error.
+        path: String,
+    },
+    /// Remove a marker-guarded block from a file (undoing [`Action::AppendOnce`]),
+    /// leaving the rest of the file intact.
+    RemoveBlock {
+        /// Target path.
+        path: String,
+        /// The marker whose block to remove.
+        marker: String,
+    },
+    /// Delete a Windows registry value (undoing [`Action::SetRegistryValue`]).
+    DeleteRegistryValue {
+        /// Hive.
+        hive: RegistryHive,
+        /// Subkey path.
+        key: String,
+        /// Value name.
+        name: String,
+    },
     /// Something the operator must do by hand (e.g. grant a macOS entitlement);
     /// the string is the instructions.
     Manual {
