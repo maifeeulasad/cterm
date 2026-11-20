@@ -1,9 +1,10 @@
 # Command capture
 
 > Status: in progress (issue [#19](https://github.com/maifeeulasad/cterm/issues/19)).
-> The source catalog, host probe, config, plan executor, and `cterm capture`
-> CLI are implemented. Wiring the event stream into the daemon is the remaining
-> step.
+> The source catalog, host probe, config, plan executor, the `cterm capture`
+> CLI, and ingestion into the record store (`cterm capture ingest`) are
+> implemented. Running ingestion automatically (from the daemon) and scaling the
+> hook transport are the remaining steps.
 
 cterm's shim records a shell it launches. But a lot of what runs on a host never
 goes through it: `sh -c` / `bash -c` from editors and build tools, scripts,
@@ -100,11 +101,21 @@ cterm capture emit --shell bash --command "<cmd>" --cwd "<dir>"
 which appends one `CommandEvent` (JSON) to `~/.cterm/capture-events.ndjson`.
 This is the v1 transport: an append-only log a consumer can tail.
 
+`cterm capture ingest` drains that log into the records database — each event
+becomes an `ExecutionRecord` in a synthetic `capture` session, so captured
+commands appear in `cterm-web` and the gRPC queries alongside shim sessions. A
+byte-offset cursor makes it idempotent, so it's safe to run repeatedly (e.g.
+from the daemon or a timer):
+
+```bash
+cterm capture ingest            # new events -> ~/.cterm/cterm.db (or $CTERM_DB)
+```
+
 ## Known limits & roadmap
 
-- **Daemon ingestion.** Events land in `capture-events.ndjson` today; feeding
-  them into the daemon's record store (and correlating with shim sessions by
-  pid + time) is the next step.
+- **Automatic ingestion.** `cterm capture ingest` drains the log into the store
+  today; running it automatically from the daemon (and correlating captured
+  commands with shim sessions by pid + time to de-duplicate) is the next step.
 - **Scale of the shell-hook transport.** Spawning `cterm` per command is fine
   for interactive use but heavy under load; a socket / batched fast path is the
   scale answer.
