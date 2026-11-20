@@ -9,10 +9,59 @@
 //!     (the shim/CLI stashes it there via `cterm auth`).
 
 use std::net::SocketAddr;
+use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::Duration;
 
 use cterm_daemon::{terminal_server_with_auth, verifier_from_env, Daemon};
 use cterm_storage::SqliteStore;
+
+/// The command-capture event log the installed hooks append to, matching the
+/// CLI's `~/.cterm/capture-events.ndjson`. Overridable via `CTERM_CAPTURE_LOG`.
+fn capture_log_path() -> Option<PathBuf> {
+    if let Some(explicit) = std::env::var_os("CTERM_CAPTURE_LOG") {
+        return Some(PathBuf::from(explicit));
+    }
+    let home = std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE"))?;
+    Some(
+        PathBuf::from(home)
+            .join(".cterm")
+            .join("capture-events.ndjson"),
+    )
+}
+
+/// Periodically drains the capture event log into the store, so captured
+/// commands show up without a manual `cterm capture ingest`. The task is cheap
+/// and self-quiescing: it no-ops while the log doesn't exist, and the byte
+/// cursor means each pass only ingests new events.
+fn spawn_capture_ingest(store: Arc<SqliteStore>) {
+    let Some(log_path) = capture_log_path() else {
+        return;
+    };
+    let state_path = log_path.with_file_name("capture-ingest-state.json");
+    tokio::spawn(async move {
+        let mut state: cterm_capture::IngestState = tokio::fs::read(&state_path)
+            .await
+            .ok()
+            .and_then(|b| serde_json::from_slice(&b).ok())
+            .unwrap_or_default();
+        loop {
+            tokio::time::sleep(Duration::from_secs(2)).await;
+            let Ok(data) = tokio::fs::read(&log_path).await else {
+                continue;
+            };
+            match cterm_capture::drain(store.as_ref(), &data, &mut state).await {
+                Ok(n) if n > 0 => {
+                    if let Ok(bytes) = serde_json::to_vec_pretty(&state) {
+                        let _ = tokio::fs::write(&state_path, bytes).await;
+                    }
+                }
+                Ok(_) => {}
+                Err(e) => eprintln!("cterm-daemon capture-ingest error: {e}"),
+            }
+        }
+    });
+}
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -27,6 +76,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (verifier, auth_enabled) = verifier_from_env(None);
 
     let store = Arc::new(SqliteStore::open(&db)?);
+    // Auto-ingest captured commands from the hook event log into the same store.
+    spawn_capture_ingest(store.clone());
     let daemon = Daemon::new(store);
 
     // Live shim IPC: Unix socket on Unix, named pipe on Windows.

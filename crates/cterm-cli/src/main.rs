@@ -10,6 +10,7 @@
 #![deny(unsafe_code)]
 
 mod auth;
+mod capture;
 mod commands;
 mod config;
 mod error;
@@ -52,6 +53,7 @@ fn cli(args: &[String]) -> i32 {
         Some("doctor") => selfcmd::doctor(&layout_or_die()),
         Some("link") => cmd_link(&args[1..]),
         Some("register") => cmd_register(&args[1..]),
+        Some("capture") => capture::run(&layout_or_die(), &args[1..]),
         Some("execute") | Some("exec") => execute::run(&args[1..]),
         Some("auth") => cmd_auth(&args[1..]),
         Some("update") | Some("upgrade") => cmd_update(&args[1..]),
@@ -408,6 +410,11 @@ COMMANDS:
         (or CTERM_AUTH_TOKEN set) for enforcement to kick in.
     doctor                        Diagnose the install (version/update, binaries,
                                   shims, PATH, records db, daemon, autostart).
+    capture <list|enable|disable>
+        Configure command-capture sources (shell hooks and system-level exec
+        auditing) so cterm records commands beyond the shim — including ones that
+        bypass it. Enabling elevated sources asks before escalating. See
+        `cterm capture --help`.
     -h, --help                    Show this help (on stdout).
     -V, --version                 Show the version.
 
