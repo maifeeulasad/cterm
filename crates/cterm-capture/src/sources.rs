@@ -463,12 +463,12 @@ impl CaptureSource for WindowsProcessAuditSource {
             ),
             PlanStep::new(
                 "include the command line in 4688 events",
-                Action::SetRegistryValue {
-                    hive: RegistryHive::LocalMachine,
-                    key: WIN_AUDIT_KEY.to_owned(),
-                    name: WIN_CMDLINE_VALUE.to_owned(),
-                    value: "1".to_owned(),
-                },
+                reg_add_dword(
+                    RegistryHive::LocalMachine,
+                    WIN_AUDIT_KEY,
+                    WIN_CMDLINE_VALUE,
+                    1,
+                ),
                 true,
             ),
         ])
@@ -494,14 +494,51 @@ impl CaptureSource for WindowsProcessAuditSource {
             ),
             PlanStep::new(
                 "stop including the command line",
-                Action::DeleteRegistryValue {
-                    hive: RegistryHive::LocalMachine,
-                    key: WIN_AUDIT_KEY.to_owned(),
-                    name: WIN_CMDLINE_VALUE.to_owned(),
-                },
+                reg_delete(RegistryHive::LocalMachine, WIN_AUDIT_KEY, WIN_CMDLINE_VALUE),
                 true,
             ),
         ])
+    }
+}
+
+/// A `reg add … /t REG_DWORD` action — the correctly-typed, runnable form for a
+/// policy DWORD (an elevated step the operator runs themselves).
+fn reg_add_dword(hive: RegistryHive, key: &str, name: &str, value: u32) -> Action {
+    let hive = match hive {
+        RegistryHive::CurrentUser => "HKCU",
+        RegistryHive::LocalMachine => "HKLM",
+    };
+    Action::RunCommand {
+        program: "reg".to_owned(),
+        args: vec![
+            "add".to_owned(),
+            format!("{hive}\\{key}"),
+            "/v".to_owned(),
+            name.to_owned(),
+            "/t".to_owned(),
+            "REG_DWORD".to_owned(),
+            "/d".to_owned(),
+            value.to_string(),
+            "/f".to_owned(),
+        ],
+    }
+}
+
+/// A `reg delete … /f` action matching [`reg_add_dword`].
+fn reg_delete(hive: RegistryHive, key: &str, name: &str) -> Action {
+    let hive = match hive {
+        RegistryHive::CurrentUser => "HKCU",
+        RegistryHive::LocalMachine => "HKLM",
+    };
+    Action::RunCommand {
+        program: "reg".to_owned(),
+        args: vec![
+            "delete".to_owned(),
+            format!("{hive}\\{key}"),
+            "/v".to_owned(),
+            name.to_owned(),
+            "/f".to_owned(),
+        ],
     }
 }
 
@@ -577,6 +614,190 @@ pub fn windows_process_audit() -> Box<dyn CaptureSource> {
 #[must_use]
 pub fn macos_endpoint_security() -> Box<dyn CaptureSource> {
     Box::new(MacEndpointSecuritySource)
+}
+
+// ---------------------------------------------------------------------------
+// PowerShell (cross-platform `pwsh` + Windows PowerShell).
+// ---------------------------------------------------------------------------
+
+const PS_HOOK: &str = r#"if (-not $env:__CTERM_CAPTURE_LOADED) {
+  $env:__CTERM_CAPTURE_LOADED = '1'
+  if (Get-Module -ListAvailable PSReadLine) {
+    Set-PSReadLineOption -AddToHistoryHandler {
+      param([string]$line)
+      try { cterm capture emit --shell powershell --command $line --cwd $PWD.Path *> $null } catch {}
+      $true
+    }
+  }
+}"#;
+
+/// PowerShell `$PROFILE` hook: a PSReadLine `AddToHistoryHandler` that reports
+/// each interactive command. Covers `pwsh` (all OSes) and Windows PowerShell.
+/// Interactive only — `-Command` needs the script-block-logging source.
+struct PowerShellProfileSource;
+
+impl PowerShellProfileSource {
+    /// The CurrentUserAllHosts profile path(s) for the PowerShell editions found
+    /// on this host (pwsh and, on Windows, Windows PowerShell).
+    fn profiles(probe: &dyn HostProbe) -> Vec<String> {
+        let Some(home) = home(probe) else {
+            return Vec::new();
+        };
+        let windows = matches!(probe.platform(), Some(Platform::Windows));
+        let mut out = Vec::new();
+        if probe.has_program("pwsh") {
+            out.push(if windows {
+                format!(r"{home}\Documents\PowerShell\profile.ps1")
+            } else {
+                format!("{home}/.config/powershell/profile.ps1")
+            });
+        }
+        if windows && probe.has_program("powershell") {
+            out.push(format!(r"{home}\Documents\WindowsPowerShell\profile.ps1"));
+        }
+        out
+    }
+}
+
+impl CaptureSource for PowerShellProfileSource {
+    fn info(&self) -> SourceInfo {
+        SourceInfo {
+            id: SourceId::new("powershell-profile"),
+            title: "PowerShell profile hook".to_owned(),
+            summary: "PSReadLine AddToHistoryHandler in $PROFILE (interactive)".to_owned(),
+            platforms: vec![Platform::Windows, Platform::Linux, Platform::Macos],
+            layer: Layer::InteractiveHook,
+            privilege: Privilege::User,
+        }
+    }
+
+    fn availability(&self, probe: &dyn HostProbe) -> Availability {
+        match probe.platform() {
+            Some(Platform::Windows | Platform::Linux | Platform::Macos) => {
+                if home(probe).is_none() {
+                    Availability::Unsupported {
+                        reason: "neither HOME nor USERPROFILE is set".to_owned(),
+                    }
+                } else if Self::profiles(probe).is_empty() {
+                    Availability::Missing {
+                        reason: "neither pwsh nor powershell is on PATH".to_owned(),
+                    }
+                } else {
+                    Availability::Available
+                }
+            }
+            _ => Availability::Unsupported {
+                reason: "no supported platform".to_owned(),
+            },
+        }
+    }
+
+    fn enable_plan(&self, probe: &dyn HostProbe) -> EnablePlan {
+        EnablePlan::new(
+            Self::profiles(probe)
+                .into_iter()
+                .map(|path| {
+                    PlanStep::new(
+                        format!("install the PowerShell hook into {path}"),
+                        Action::AppendOnce {
+                            path,
+                            marker: marker("powershell"),
+                            block: PS_HOOK.to_owned(),
+                        },
+                        false,
+                    )
+                })
+                .collect(),
+        )
+    }
+
+    fn disable_plan(&self, probe: &dyn HostProbe) -> EnablePlan {
+        EnablePlan::new(
+            Self::profiles(probe)
+                .into_iter()
+                .map(|path| {
+                    PlanStep::new(
+                        format!("remove the PowerShell hook from {path}"),
+                        Action::RemoveBlock {
+                            path,
+                            marker: marker("powershell"),
+                        },
+                        false,
+                    )
+                })
+                .collect(),
+        )
+    }
+}
+
+const PS_SBL_KEY: &str = r"SOFTWARE\Policies\Microsoft\Windows\PowerShell\ScriptBlockLogging";
+
+/// PowerShell Script Block Logging (Event 4104): logs *every* script block,
+/// including inline `-Command`, encoded, or runtime-built — bypass-proof for
+/// PowerShell. Policy-based, so it needs admin.
+struct WindowsScriptBlockSource;
+
+impl CaptureSource for WindowsScriptBlockSource {
+    fn info(&self) -> SourceInfo {
+        SourceInfo {
+            id: SourceId::new("powershell-scriptblock"),
+            title: "PowerShell Script Block Logging (4104)".to_owned(),
+            summary: "logs every script block incl. `-Command` (admin, event 4104)".to_owned(),
+            platforms: vec![Platform::Windows],
+            layer: Layer::NonInteractiveHook,
+            privilege: Privilege::Admin,
+        }
+    }
+
+    fn availability(&self, probe: &dyn HostProbe) -> Availability {
+        match probe.platform() {
+            Some(Platform::Windows) if probe.is_elevated() => Availability::Available,
+            Some(Platform::Windows) => Availability::NeedsElevation {
+                privilege: Privilege::Admin,
+            },
+            _ => Availability::Unsupported {
+                reason: "Script Block Logging is Windows-only".to_owned(),
+            },
+        }
+    }
+
+    fn enable_plan(&self, _probe: &dyn HostProbe) -> EnablePlan {
+        EnablePlan::new(vec![PlanStep::new(
+            "enable PowerShell Script Block Logging",
+            reg_add_dword(
+                RegistryHive::LocalMachine,
+                PS_SBL_KEY,
+                "EnableScriptBlockLogging",
+                1,
+            ),
+            true,
+        )])
+    }
+
+    fn disable_plan(&self, _probe: &dyn HostProbe) -> EnablePlan {
+        EnablePlan::new(vec![PlanStep::new(
+            "disable PowerShell Script Block Logging",
+            reg_delete(
+                RegistryHive::LocalMachine,
+                PS_SBL_KEY,
+                "EnableScriptBlockLogging",
+            ),
+            true,
+        )])
+    }
+}
+
+/// PowerShell `$PROFILE` interactive hook source. See [`PowerShellProfileSource`].
+#[must_use]
+pub fn powershell_profile() -> Box<dyn CaptureSource> {
+    Box::new(PowerShellProfileSource)
+}
+
+/// PowerShell Script Block Logging source (Windows, admin). See
+/// [`WindowsScriptBlockSource`].
+#[must_use]
+pub fn powershell_scriptblock() -> Box<dyn CaptureSource> {
+    Box::new(WindowsScriptBlockSource)
 }
 
 #[cfg(test)]
@@ -791,13 +1012,54 @@ mod tests {
         );
         let plan = windows_process_audit().enable_plan(&unpriv);
         assert!(plan.requires_elevation());
+        // The command-line DWORD is a runnable, correctly-typed `reg add`.
         assert!(plan.steps.iter().any(|s| matches!(
             &s.action,
-            Action::SetRegistryValue {
-                hive: RegistryHive::LocalMachine,
-                ..
-            }
+            Action::RunCommand { program, args }
+                if program == "reg" && args.iter().any(|a| a.starts_with("HKLM\\"))
+                    && args.iter().any(|a| a == "REG_DWORD")
         )));
+    }
+
+    #[test]
+    fn powershell_profile_available_with_pwsh_and_writes_profiles() {
+        let probe = audit_probe(Platform::Windows, false, &["pwsh", "powershell"]);
+        assert_eq!(
+            powershell_profile().availability(&probe),
+            Availability::Available
+        );
+        let plan = powershell_profile().enable_plan(&probe);
+        // One AppendOnce per edition present (pwsh + Windows PowerShell).
+        assert_eq!(plan.steps.len(), 2);
+        assert!(!plan.requires_elevation());
+        assert!(plan
+            .steps
+            .iter()
+            .all(|s| matches!(&s.action, Action::AppendOnce { .. })));
+        // No PowerShell on PATH -> missing.
+        let none = audit_probe(Platform::Linux, false, &[]);
+        assert!(matches!(
+            powershell_profile().availability(&none),
+            Availability::Missing { .. }
+        ));
+    }
+
+    #[test]
+    fn powershell_scriptblock_needs_admin_dword() {
+        let unpriv = audit_probe(Platform::Windows, false, &[]);
+        assert!(matches!(
+            powershell_scriptblock().availability(&unpriv),
+            Availability::NeedsElevation {
+                privilege: Privilege::Admin
+            }
+        ));
+        let plan = powershell_scriptblock().enable_plan(&unpriv);
+        assert!(plan.requires_elevation());
+        assert!(matches!(
+            &plan.steps[0].action,
+            Action::RunCommand { program, args }
+                if program == "reg" && args.iter().any(|a| a == "REG_DWORD")
+        ));
     }
 
     #[test]

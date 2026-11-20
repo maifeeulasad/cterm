@@ -39,10 +39,12 @@ pub fn catalog() -> Vec<Box<dyn CaptureSource>> {
         sources::bash(),
         sources::zsh(),
         sources::cmd(),
+        sources::powershell_profile(),
         // System-audit layer (privileged, bypass-proof).
         sources::linux_auditd(),
         sources::windows_process_audit(),
         sources::macos_endpoint_security(),
+        sources::powershell_scriptblock(),
     ]
 }
 
@@ -82,9 +84,9 @@ mod tests {
     fn each_platform_has_shell_hooks_and_a_system_auditor() {
         use cterm_core::capture::Layer;
         for (platform, expected) in [
-            (Platform::Linux, 3),   // bash, zsh, auditd
-            (Platform::Macos, 3),   // bash, zsh, endpoint-security
-            (Platform::Windows, 2), // cmd, process-audit
+            (Platform::Linux, 4),   // bash, zsh, auditd, powershell-profile
+            (Platform::Macos, 4),   // bash, zsh, endpoint-security, powershell-profile
+            (Platform::Windows, 4), // cmd, process-audit, powershell-profile+scriptblock
         ] {
             let sources = for_platform(platform);
             assert_eq!(sources.len(), expected, "{platform:?}");
