@@ -15,6 +15,7 @@ mod config;
 mod error;
 mod execute;
 mod layout;
+mod register;
 mod selfcmd;
 mod service;
 #[cfg(windows)]
@@ -50,6 +51,7 @@ fn cli(args: &[String]) -> i32 {
         Some("service") => cmd_service(&args[1..]),
         Some("doctor") => selfcmd::doctor(&layout_or_die()),
         Some("link") => cmd_link(&args[1..]),
+        Some("register") => cmd_register(&args[1..]),
         Some("execute") | Some("exec") => execute::run(&args[1..]),
         Some("auth") => cmd_auth(&args[1..]),
         Some("update") | Some("upgrade") => cmd_update(&args[1..]),
@@ -190,6 +192,37 @@ fn cmd_update(args: &[String]) -> i32 {
         }
     }
     selfcmd::update(check_only)
+}
+
+fn cmd_register(args: &[String]) -> i32 {
+    let mut shell: Option<String> = None;
+    let mut print = false;
+    let mut remove = false;
+    for a in args {
+        match a.as_str() {
+            "--print" => print = true,
+            "--remove" => remove = true,
+            other if other.starts_with("--") => {
+                eprintln!("cterm: register: unknown flag '{other}' (use --print, --remove)");
+                return 2;
+            }
+            other => {
+                if shell.is_some() {
+                    eprintln!("cterm: register: only one shell may be given");
+                    return 2;
+                }
+                shell = Some(other.to_owned());
+            }
+        }
+    }
+    register::register(
+        &layout_or_die(),
+        register::RegisterArgs {
+            shell,
+            print,
+            remove,
+        },
+    )
 }
 
 fn cmd_link(args: &[String]) -> i32 {
@@ -362,6 +395,12 @@ COMMANDS:
         bin dir (--user: ~/.local/bin or %LOCALAPPDATA%\\cterm\\bin [default];
         --system: /usr/local/bin or %ProgramFiles%\\cterm). Symlinks on Unix,
         copies on Windows. Never edits PATH; prints how if the dir isn't on it.
+    register [SHELL] [--print|--remove]
+        Register a cterm shim as a terminal profile so a human opens a recorded
+        shell session. On Windows, writes a Windows Terminal profile fragment
+        (--print previews it, --remove deletes it); on macOS/Linux, prints the
+        profile settings to paste into your terminal emulator. SHELL defaults to
+        the first installed shim.
     execute [--id <session>] [--addr <url>] [--json|--quiet] <COMMAND>
         (alias: exec) Run <COMMAND> on the daemon over gRPC and stream the
         output. Exits with the command's own exit code. Agent-friendly front
