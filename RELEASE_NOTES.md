@@ -1,10 +1,19 @@
-# cterm v0.7.0
+# cterm v0.7.1
 
 A terminal integration / shim tool that lets agents observe, record, stream, and
 drive shell command executions **without ever holding the credentials used to
 open the session**.
 
 > Early release. Tri-platform; shared for feedback. Expect rough edges.
+
+## 0.7.1 — Windows install docs
+
+Docs-only. The Windows install instructions now extract into
+`%LOCALAPPDATA%\cterm\bin` — the same directory `cterm link --user` and
+`cterm update` operate on, so there's one canonical install location on
+Windows — and give concrete PowerShell commands for putting that directory on
+`PATH` (both for the current session and persisted to the User `PATH`),
+replacing the previous "add it to your PATH" prose. No code changes.
 
 ## 0.7.0 — cterm-web UX pass
 
@@ -401,8 +410,18 @@ cterm --help
 
 ```powershell
 Invoke-WebRequest "https://github.com/maifeeulasad/cterm/releases/latest/download/cterm-x86_64-windows.zip" -OutFile cterm.zip
-Expand-Archive cterm.zip -DestinationPath "$env:LOCALAPPDATA\cterm" -Force
-# Add "$env:LOCALAPPDATA\cterm" to your PATH, then:
+# Extract into %LOCALAPPDATA%\cterm\bin — the same location `cterm link --user`
+# and `cterm update` use, so there's one canonical install dir on Windows.
+Expand-Archive cterm.zip -DestinationPath "$env:LOCALAPPDATA\cterm\bin" -Force
+
+# Put it on PATH for this session:
+$env:PATH += ";$env:LOCALAPPDATA\cterm\bin"
+# ...and persist it for future sessions (appends to your User PATH):
+[Environment]::SetEnvironmentVariable(
+  "Path",
+  [Environment]::GetEnvironmentVariable("Path", "User") + ";$env:LOCALAPPDATA\cterm\bin",
+  "User")
+
 cterm.exe --help
 ```
 
