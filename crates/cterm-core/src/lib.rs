@@ -28,6 +28,7 @@
 #![warn(missing_docs)]
 
 pub mod auth;
+pub mod capture;
 pub mod command;
 pub mod error;
 pub mod event;
@@ -42,6 +43,9 @@ pub mod stream;
 
 // Re-export the common surface so downstream crates can `use cterm_core::*`.
 pub use auth::{deny, AuthVerifier, NoopVerifier};
+pub use capture::{
+    Availability, CommandEvent, EventKind, Layer, Platform, Privilege, SourceId, SourceInfo,
+};
 pub use command::{Command, EnvVar};
 pub use error::{Error, Result};
 pub use event::ExecutionEvent;
