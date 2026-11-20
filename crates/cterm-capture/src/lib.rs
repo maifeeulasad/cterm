@@ -20,11 +20,13 @@
 
 pub mod config;
 pub mod executor;
+pub mod ingest;
 pub mod probe;
 pub mod sources;
 
 pub use config::CaptureConfig;
 pub use executor::{apply, ApplyOutcome};
+pub use ingest::{capture_session, event_to_execution};
 pub use probe::SystemProbe;
 
 use cterm_core::capture::{CaptureSource, Platform, SourceId};
