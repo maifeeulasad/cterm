@@ -195,7 +195,7 @@ fn cmd_update(args: &[String]) -> i32 {
 }
 
 fn cmd_register(args: &[String]) -> i32 {
-    let mut shell: Option<String> = None;
+    let mut shells: Vec<String> = Vec::new();
     let mut print = false;
     let mut remove = false;
     for a in args {
@@ -206,19 +206,13 @@ fn cmd_register(args: &[String]) -> i32 {
                 eprintln!("cterm: register: unknown flag '{other}' (use --print, --remove)");
                 return 2;
             }
-            other => {
-                if shell.is_some() {
-                    eprintln!("cterm: register: only one shell may be given");
-                    return 2;
-                }
-                shell = Some(other.to_owned());
-            }
+            other => shells.push(other.to_owned()),
         }
     }
     register::register(
         &layout_or_die(),
         register::RegisterArgs {
-            shell,
+            shells,
             print,
             remove,
         },
@@ -395,12 +389,12 @@ COMMANDS:
         bin dir (--user: ~/.local/bin or %LOCALAPPDATA%\\cterm\\bin [default];
         --system: /usr/local/bin or %ProgramFiles%\\cterm). Symlinks on Unix,
         copies on Windows. Never edits PATH; prints how if the dir isn't on it.
-    register [SHELL] [--print|--remove]
-        Register a cterm shim as a terminal profile so a human opens a recorded
-        shell session. On Windows, writes a Windows Terminal profile fragment
-        (--print previews it, --remove deletes it); on macOS/Linux, prints the
-        profile settings to paste into your terminal emulator. SHELL defaults to
-        the first installed shim.
+    register [SHELL...] [--print|--remove]
+        Register cterm shims as terminal profiles so a human opens a recorded
+        shell session. On Windows, adds a profile per shell to Windows Terminal's
+        settings.json (hot-reloaded, no restart; --print previews, --remove
+        deletes); on macOS/Linux, prints the profile settings to paste into your
+        terminal emulator. With no SHELL, registers every installed shim.
     execute [--id <session>] [--addr <url>] [--json|--quiet] <COMMAND>
         (alias: exec) Run <COMMAND> on the daemon over gRPC and stream the
         output. Exits with the command's own exit code. Agent-friendly front
