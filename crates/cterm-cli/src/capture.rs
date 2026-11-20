@@ -13,8 +13,20 @@ use cterm_capture::{apply, CaptureConfig, SystemProbe};
 use cterm_core::capture::{
     Availability, CaptureSource, CommandEvent, EventKind, HostProbe, SourceId,
 };
+use cterm_core::{RecordStore, SessionId};
+use cterm_storage::SqliteStore;
 
 use crate::layout::Layout;
+
+/// Cursor + session state so `capture ingest` only ingests new events and keeps
+/// recording into one synthetic capture session.
+#[derive(Default, serde::Serialize, serde::Deserialize)]
+struct IngestState {
+    #[serde(default)]
+    session: Option<SessionId>,
+    #[serde(default)]
+    offset: u64,
+}
 
 /// Entry point for `cterm capture …`, dispatched from `main`.
 pub fn run(layout: &Layout, args: &[String]) -> i32 {
@@ -23,6 +35,7 @@ pub fn run(layout: &Layout, args: &[String]) -> i32 {
         Some("enable") => cmd_set(layout, &args[1..], true),
         Some("disable") => cmd_set(layout, &args[1..], false),
         Some("emit") => cmd_emit(layout, &args[1..]),
+        Some("ingest") => cmd_ingest(layout, &args[1..]),
         Some("-h") | Some("--help") => {
             print!("{}", usage());
             0
@@ -317,6 +330,122 @@ fn cmd_emit(layout: &Layout, args: &[String]) -> i32 {
         }
     }
     0
+}
+
+/// `cterm capture ingest` — drain the NDJSON event log into the record store so
+/// captured commands appear in the web UI / gRPC queries. Idempotent: a byte
+/// cursor means re-running only ingests new events, and one synthetic capture
+/// session is reused across runs.
+fn cmd_ingest(layout: &Layout, args: &[String]) -> i32 {
+    let mut db_arg: Option<String> = None;
+    let mut it = args.iter();
+    while let Some(a) = it.next() {
+        match a.as_str() {
+            "--db" => db_arg = it.next().cloned(),
+            other => {
+                eprintln!("cterm capture ingest: unknown arg '{other}' (use --db <path>)");
+                return 2;
+            }
+        }
+    }
+    let db = db_arg
+        .or_else(|| std::env::var("CTERM_DB").ok())
+        .map_or_else(|| layout.default_db(), PathBuf::from);
+
+    let events_path = layout.base().join("capture-events.ndjson");
+    let state_path = layout.base().join("capture-ingest-state.json");
+    let mut state: IngestState = std::fs::read_to_string(&state_path)
+        .ok()
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or_default();
+
+    let data = match std::fs::read(&events_path) {
+        Ok(d) => d,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            println!("No capture events yet ({}).", events_path.display());
+            return 0;
+        }
+        Err(e) => {
+            eprintln!("cterm: cannot read {}: {e}", events_path.display());
+            return 1;
+        }
+    };
+    // Log truncated/rotated since last run: start over.
+    if state.offset as usize > data.len() {
+        state.offset = 0;
+    }
+    let slice = &data[state.offset as usize..];
+    // Only process up to the last newline — a trailing partial line may still be
+    // mid-write by a hook.
+    let Some(last_nl) = slice.iter().rposition(|&b| b == b'\n') else {
+        println!("No new complete events to ingest.");
+        return 0;
+    };
+    let complete = &slice[..=last_nl];
+    let text = String::from_utf8_lossy(complete).into_owned();
+
+    let store = match SqliteStore::open(&db) {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("cterm: cannot open records db {}: {e}", db.display());
+            return 1;
+        }
+    };
+    let rt = match tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+    {
+        Ok(r) => r,
+        Err(e) => {
+            eprintln!("cterm: tokio runtime: {e}");
+            return 1;
+        }
+    };
+
+    let result: cterm_core::Result<u64> = rt.block_on(async {
+        let session = match state.session {
+            Some(id) => id,
+            None => {
+                let s = cterm_capture::capture_session();
+                store.put_session(&s).await?;
+                state.session = Some(s.id);
+                s.id
+            }
+        };
+        let mut count = 0u64;
+        for line in text.lines() {
+            let line = line.trim();
+            if line.is_empty() {
+                continue;
+            }
+            // Skip unparseable lines rather than abort the whole batch.
+            if let Ok(event) = serde_json::from_str::<CommandEvent>(line) {
+                let rec = cterm_capture::event_to_execution(&event, session);
+                store.put_execution(&rec).await?;
+                count += 1;
+            }
+        }
+        Ok(count)
+    });
+
+    match result {
+        Ok(count) => {
+            state.offset += complete.len() as u64;
+            let _ = std::fs::write(
+                &state_path,
+                serde_json::to_string_pretty(&state).unwrap_or_default(),
+            );
+            println!(
+                "Ingested {count} captured command(s) into {}.",
+                db.display()
+            );
+            0
+        }
+        Err(e) => {
+            eprintln!("cterm: ingest failed: {e}");
+            1
+        }
+    }
 }
 
 fn confirm(prompt: &str) -> bool {
