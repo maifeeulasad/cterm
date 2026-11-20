@@ -40,28 +40,30 @@ profile format.
 
 ### Windows — Windows Terminal (automatic)
 
-Windows Terminal supports [JSON *fragment* extensions][frag], a supported
-drop-in mechanism, so registration is a one-shot:
+`cterm register` adds a `cterm (<shell>)` profile directly to Windows Terminal's
+`settings.json`:
 
 ```powershell
-cterm register              # writes the fragment, adds a "cterm (<shell>)" profile
-cterm register --print      # preview the fragment JSON without writing
-cterm register --remove     # delete the fragment
+cterm register              # adds the profile to settings.json
+cterm register --print      # preview the profile JSON without writing
+cterm register --remove     # delete the profile
 ```
 
-The fragment is written to:
+Windows Terminal **hot-reloads** `settings.json`, so the profile appears in the
+new-tab (▾) menu right away — no restart. Open a tab from it to start a recorded
+session.
 
-```
-%LOCALAPPDATA%\Microsoft\Windows Terminal\Fragments\cterm\cterm.json
-```
-
-It adds a profile named `cterm (<shell>)` whose `commandline` is the shim and
-whose `startingDirectory` is `null` so Windows Terminal inherits the directory
-it was launched from (preserving your working directory). Open a new tab from
-that profile to start a recorded session. Restart Windows Terminal if the
-profile doesn't appear immediately.
+> **Why not a JSON fragment?** Windows Terminal's [fragment extensions][frag]
+> look like the natural fit, but on the packaged/Store build the mere presence
+> of a per-user `Fragments\` folder can make Terminal fail to load its settings
+> and fall back to defaults ([microsoft/terminal#20893][bug]) — a valid fragment
+> doesn't rescue it. So `cterm register` edits `settings.json` instead (and
+> removes any `Fragments\cterm` folder an older cterm left behind). It writes a
+> profile with a stable GUID, preserving everything else in the file; re-running
+> updates in place, and `--remove` deletes it by GUID.
 
 [frag]: https://learn.microsoft.com/windows/terminal/json-fragment-extensions
+[bug]: https://github.com/microsoft/terminal/issues/20893
 
 ### macOS / Linux — paste the settings
 
