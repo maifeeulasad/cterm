@@ -19,8 +19,6 @@
 //!
 //! [frag]: https://learn.microsoft.com/windows/terminal/json-fragment-extensions
 
-use std::path::PathBuf;
-
 use crate::commands::{self, shim_file_name};
 use crate::layout::Layout;
 
@@ -56,6 +54,9 @@ pub fn register(layout: &Layout, args: RegisterArgs) -> i32 {
     }
     #[cfg(not(windows))]
     {
+        // There's no file to write on non-Windows, so `--print` is implicit —
+        // we only ever print. Touch the flag so it isn't flagged "never read".
+        let _ = args.print;
         unix_profile::print(&shell, &shim, args.remove);
         0
     }
@@ -98,8 +99,8 @@ fn quote(path: &std::path::Path) -> String {
 
 #[cfg(windows)]
 mod windows_terminal {
-    use super::{quote, PathBuf};
-    use std::path::Path;
+    use super::quote;
+    use std::path::{Path, PathBuf};
 
     /// The Windows Terminal fragments directory for the current user.
     fn fragments_dir() -> Option<PathBuf> {
