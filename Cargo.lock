@@ -452,6 +452,7 @@ dependencies = [
 name = "cterm-cli"
 version = "0.8.1"
 dependencies = [
+ "cterm-capture",
  "cterm-core",
  "cterm-ipc",
  "cterm-proto",
