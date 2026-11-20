@@ -30,7 +30,16 @@ use cterm_core::capture::{CaptureSource, Platform, SourceId};
 /// [`for_platform`] to find the ones usable here.
 #[must_use]
 pub fn catalog() -> Vec<Box<dyn CaptureSource>> {
-    vec![sources::bash(), sources::zsh(), sources::cmd()]
+    vec![
+        // Shell-hook layer (unprivileged, as-typed).
+        sources::bash(),
+        sources::zsh(),
+        sources::cmd(),
+        // System-audit layer (privileged, bypass-proof).
+        sources::linux_auditd(),
+        sources::windows_process_audit(),
+        sources::macos_endpoint_security(),
+    ]
 }
 
 /// The catalog sources that apply to `platform`.
@@ -66,15 +75,28 @@ mod tests {
     }
 
     #[test]
-    fn linux_has_both_shell_hooks() {
-        let on_linux = for_platform(Platform::Linux);
-        assert_eq!(on_linux.len(), 2);
+    fn each_platform_has_shell_hooks_and_a_system_auditor() {
+        use cterm_core::capture::Layer;
+        for (platform, expected) in [
+            (Platform::Linux, 3),   // bash, zsh, auditd
+            (Platform::Macos, 3),   // bash, zsh, endpoint-security
+            (Platform::Windows, 2), // cmd, process-audit
+        ] {
+            let sources = for_platform(platform);
+            assert_eq!(sources.len(), expected, "{platform:?}");
+            assert!(
+                sources.iter().any(|s| s.info().layer == Layer::SystemAudit),
+                "{platform:?} needs a bypass-proof system auditor"
+            );
+        }
     }
 
     #[test]
-    fn windows_has_the_cmd_source() {
-        let on_win = for_platform(Platform::Windows);
-        assert_eq!(on_win.len(), 1);
-        assert_eq!(on_win[0].info().id, SourceId::new("cmd-autorun"));
+    fn system_auditors_are_registered() {
+        // On a non-matching platform they are Unsupported; the per-OS behavior
+        // (NeedsElevation vs Available-when-root) is covered in sources tests.
+        assert!(find(&SourceId::new("linux-auditd")).is_some());
+        assert!(find(&SourceId::new("windows-process-audit")).is_some());
+        assert!(find(&SourceId::new("macos-endpoint-security")).is_some());
     }
 }

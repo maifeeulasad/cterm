@@ -308,15 +308,288 @@ pub fn cmd() -> Box<dyn CaptureSource> {
     Box::new(CmdAutoRunSource)
 }
 
+// ---------------------------------------------------------------------------
+// System-audit layer: the bypass-proof floor. These need elevation (root /
+// admin / an OS entitlement), so their availability resolves to
+// `NeedsElevation` unless the process is already elevated — which is exactly
+// where the config flow prompts the operator to accept or reject.
+// ---------------------------------------------------------------------------
+
+/// Linux auditd: an `execve` audit rule capturing every process launch,
+/// however it was started — the only layer that catches `sh -c` / `zsh -c`.
+struct LinuxAuditdSource;
+
+impl CaptureSource for LinuxAuditdSource {
+    fn info(&self) -> SourceInfo {
+        SourceInfo {
+            id: SourceId::new("linux-auditd"),
+            title: "Linux auditd (execve)".to_owned(),
+            summary: "kernel execve auditing — bypass-proof; sees every process launch".to_owned(),
+            platforms: vec![Platform::Linux],
+            layer: Layer::SystemAudit,
+            privilege: Privilege::Root,
+        }
+    }
+
+    fn availability(&self, probe: &dyn HostProbe) -> Availability {
+        match probe.platform() {
+            Some(Platform::Linux) if !probe.has_program("auditctl") => Availability::Missing {
+                reason: "auditd is not installed (install the `audit`/`auditd` package)".to_owned(),
+            },
+            Some(Platform::Linux) if probe.is_elevated() => Availability::Available,
+            Some(Platform::Linux) => Availability::NeedsElevation {
+                privilege: Privilege::Root,
+            },
+            _ => Availability::Unsupported {
+                reason: "auditd is Linux-only".to_owned(),
+            },
+        }
+    }
+
+    fn enable_plan(&self, _probe: &dyn HostProbe) -> EnablePlan {
+        EnablePlan::new(vec![
+            PlanStep::new(
+                "add a live execve audit rule tagged `cterm`",
+                Action::RunCommand {
+                    program: "auditctl".to_owned(),
+                    args: [
+                        "-a",
+                        "always,exit",
+                        "-F",
+                        "arch=b64",
+                        "-S",
+                        "execve",
+                        "-k",
+                        "cterm",
+                    ]
+                    .iter()
+                    .map(|s| (*s).to_owned())
+                    .collect(),
+                },
+                true,
+            ),
+            PlanStep::new(
+                "persist the rule across reboots",
+                Action::WriteFile {
+                    path: "/etc/audit/rules.d/cterm.rules".to_owned(),
+                    contents: "-a always,exit -F arch=b64 -S execve -k cterm\n".to_owned(),
+                },
+                true,
+            ),
+        ])
+    }
+
+    fn disable_plan(&self, _probe: &dyn HostProbe) -> EnablePlan {
+        EnablePlan::new(vec![
+            PlanStep::new(
+                "remove the live execve audit rule",
+                Action::RunCommand {
+                    program: "auditctl".to_owned(),
+                    args: [
+                        "-d",
+                        "always,exit",
+                        "-F",
+                        "arch=b64",
+                        "-S",
+                        "execve",
+                        "-k",
+                        "cterm",
+                    ]
+                    .iter()
+                    .map(|s| (*s).to_owned())
+                    .collect(),
+                },
+                true,
+            ),
+            PlanStep::new(
+                "remove the persisted rule file",
+                Action::RemoveFile {
+                    path: "/etc/audit/rules.d/cterm.rules".to_owned(),
+                },
+                true,
+            ),
+        ])
+    }
+}
+
+/// Windows process-creation auditing: Event 4688 with command line — captures
+/// every process launch incl. `cmd /c` and `powershell -Command`.
+struct WindowsProcessAuditSource;
+
+const WIN_AUDIT_KEY: &str = r"SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System\Audit";
+const WIN_CMDLINE_VALUE: &str = "ProcessCreationIncludeCmdLine_Enabled";
+
+impl CaptureSource for WindowsProcessAuditSource {
+    fn info(&self) -> SourceInfo {
+        SourceInfo {
+            id: SourceId::new("windows-process-audit"),
+            title: "Windows process auditing (4688 + cmdline)".to_owned(),
+            summary: "Event 4688 with command line — bypass-proof; every process launch".to_owned(),
+            platforms: vec![Platform::Windows],
+            layer: Layer::SystemAudit,
+            privilege: Privilege::Admin,
+        }
+    }
+
+    fn availability(&self, probe: &dyn HostProbe) -> Availability {
+        match probe.platform() {
+            Some(Platform::Windows) if probe.is_elevated() => Availability::Available,
+            Some(Platform::Windows) => Availability::NeedsElevation {
+                privilege: Privilege::Admin,
+            },
+            _ => Availability::Unsupported {
+                reason: "process-creation auditing is Windows-only".to_owned(),
+            },
+        }
+    }
+
+    fn enable_plan(&self, _probe: &dyn HostProbe) -> EnablePlan {
+        EnablePlan::new(vec![
+            PlanStep::new(
+                "enable Process Creation auditing",
+                Action::RunCommand {
+                    program: "auditpol".to_owned(),
+                    args: [
+                        "/set",
+                        "/subcategory:Process Creation",
+                        "/success:enable",
+                        "/failure:enable",
+                    ]
+                    .iter()
+                    .map(|s| (*s).to_owned())
+                    .collect(),
+                },
+                true,
+            ),
+            PlanStep::new(
+                "include the command line in 4688 events",
+                Action::SetRegistryValue {
+                    hive: RegistryHive::LocalMachine,
+                    key: WIN_AUDIT_KEY.to_owned(),
+                    name: WIN_CMDLINE_VALUE.to_owned(),
+                    value: "1".to_owned(),
+                },
+                true,
+            ),
+        ])
+    }
+
+    fn disable_plan(&self, _probe: &dyn HostProbe) -> EnablePlan {
+        EnablePlan::new(vec![
+            PlanStep::new(
+                "disable Process Creation auditing",
+                Action::RunCommand {
+                    program: "auditpol".to_owned(),
+                    args: [
+                        "/set",
+                        "/subcategory:Process Creation",
+                        "/success:disable",
+                        "/failure:disable",
+                    ]
+                    .iter()
+                    .map(|s| (*s).to_owned())
+                    .collect(),
+                },
+                true,
+            ),
+            PlanStep::new(
+                "stop including the command line",
+                Action::DeleteRegistryValue {
+                    hive: RegistryHive::LocalMachine,
+                    key: WIN_AUDIT_KEY.to_owned(),
+                    name: WIN_CMDLINE_VALUE.to_owned(),
+                },
+                true,
+            ),
+        ])
+    }
+}
+
+/// macOS Endpoint Security: exec notifications — bypass-proof, but requires a
+/// notarized helper holding Apple's Endpoint Security client entitlement, which
+/// can't be granted programmatically. Enabling is therefore a guided manual
+/// step.
+struct MacEndpointSecuritySource;
+
+const ES_ENTITLEMENT: &str = "com.apple.developer.endpoint-security.client";
+
+impl CaptureSource for MacEndpointSecuritySource {
+    fn info(&self) -> SourceInfo {
+        SourceInfo {
+            id: SourceId::new("macos-endpoint-security"),
+            title: "macOS Endpoint Security (exec)".to_owned(),
+            summary: "exec notifications — bypass-proof; needs an Apple entitlement".to_owned(),
+            platforms: vec![Platform::Macos],
+            layer: Layer::SystemAudit,
+            privilege: Privilege::Entitlement(ES_ENTITLEMENT.to_owned()),
+        }
+    }
+
+    fn availability(&self, probe: &dyn HostProbe) -> Availability {
+        match probe.platform() {
+            Some(Platform::Macos) => Availability::NeedsElevation {
+                privilege: Privilege::Entitlement(ES_ENTITLEMENT.to_owned()),
+            },
+            _ => Availability::Unsupported {
+                reason: "Endpoint Security is macOS-only".to_owned(),
+            },
+        }
+    }
+
+    fn enable_plan(&self, _probe: &dyn HostProbe) -> EnablePlan {
+        EnablePlan::new(vec![PlanStep::new(
+            "install a notarized Endpoint Security helper",
+            Action::Manual {
+                instructions: format!(
+                    "macOS exec auditing needs an Endpoint Security client holding the \
+                     `{ES_ENTITLEMENT}` entitlement (Apple-approved) plus a notarized, \
+                     SIP-loaded system extension. See docs/capture.md."
+                ),
+            },
+            true,
+        )])
+    }
+
+    fn disable_plan(&self, _probe: &dyn HostProbe) -> EnablePlan {
+        EnablePlan::new(vec![PlanStep::new(
+            "remove the Endpoint Security helper",
+            Action::Manual {
+                instructions: "Uninstall the cterm Endpoint Security system extension.".to_owned(),
+            },
+            true,
+        )])
+    }
+}
+
+/// Linux auditd exec-audit source. See [`LinuxAuditdSource`].
+#[must_use]
+pub fn linux_auditd() -> Box<dyn CaptureSource> {
+    Box::new(LinuxAuditdSource)
+}
+
+/// Windows process-creation auditing source. See [`WindowsProcessAuditSource`].
+#[must_use]
+pub fn windows_process_audit() -> Box<dyn CaptureSource> {
+    Box::new(WindowsProcessAuditSource)
+}
+
+/// macOS Endpoint Security source. See [`MacEndpointSecuritySource`].
+#[must_use]
+pub fn macos_endpoint_security() -> Box<dyn CaptureSource> {
+    Box::new(MacEndpointSecuritySource)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::collections::HashSet;
 
+    #[derive(Default)]
     struct FakeProbe {
         platform: Option<Platform>,
         home: Option<String>,
         programs: HashSet<String>,
+        elevated: bool,
     }
 
     impl HostProbe for FakeProbe {
@@ -324,7 +597,7 @@ mod tests {
             self.platform
         }
         fn is_elevated(&self) -> bool {
-            false
+            self.elevated
         }
         fn env(&self, key: &str) -> Option<String> {
             match key {
@@ -345,6 +618,7 @@ mod tests {
             platform: Some(Platform::Linux),
             home: Some("/home/me".into()),
             programs: HashSet::from([shell.to_owned()]),
+            elevated: false,
         }
     }
 
@@ -362,6 +636,7 @@ mod tests {
             platform: Some(Platform::Linux),
             home: Some("/home/me".into()),
             programs: HashSet::new(),
+            elevated: false,
         };
         assert!(matches!(
             bash().availability(&probe),
@@ -375,6 +650,7 @@ mod tests {
             platform: Some(Platform::Windows),
             home: Some(r"C:\Users\me".into()),
             programs: HashSet::from(["bash".into()]),
+            elevated: false,
         };
         assert!(matches!(
             bash().availability(&probe),
@@ -424,6 +700,17 @@ mod tests {
             platform: Some(Platform::Windows),
             home: Some(r"C:\Users\me".into()),
             programs: HashSet::new(),
+            elevated: false,
+        }
+    }
+
+    /// A probe for the system-audit tests: platform + elevation + programs.
+    fn audit_probe(platform: Platform, elevated: bool, programs: &[&str]) -> FakeProbe {
+        FakeProbe {
+            platform: Some(platform),
+            home: Some("/root".into()),
+            programs: programs.iter().map(|s| (*s).to_owned()).collect(),
+            elevated,
         }
     }
 
@@ -467,5 +754,64 @@ mod tests {
             Action::DeleteRegistryValue { .. }
         ));
         assert!(matches!(&plan.steps[1].action, Action::RemoveFile { .. }));
+    }
+
+    #[test]
+    fn auditd_needs_root_then_available_when_elevated() {
+        let unpriv = audit_probe(Platform::Linux, false, &["auditctl"]);
+        assert!(matches!(
+            linux_auditd().availability(&unpriv),
+            Availability::NeedsElevation {
+                privilege: Privilege::Root
+            }
+        ));
+        let root = audit_probe(Platform::Linux, true, &["auditctl"]);
+        assert_eq!(linux_auditd().availability(&root), Availability::Available);
+        let no_auditd = audit_probe(Platform::Linux, false, &[]);
+        assert!(matches!(
+            linux_auditd().availability(&no_auditd),
+            Availability::Missing { .. }
+        ));
+        assert!(linux_auditd().enable_plan(&unpriv).requires_elevation());
+    }
+
+    #[test]
+    fn windows_audit_needs_admin_and_writes_hklm() {
+        let unpriv = audit_probe(Platform::Windows, false, &[]);
+        assert!(matches!(
+            windows_process_audit().availability(&unpriv),
+            Availability::NeedsElevation {
+                privilege: Privilege::Admin
+            }
+        ));
+        let admin = audit_probe(Platform::Windows, true, &[]);
+        assert_eq!(
+            windows_process_audit().availability(&admin),
+            Availability::Available
+        );
+        let plan = windows_process_audit().enable_plan(&unpriv);
+        assert!(plan.requires_elevation());
+        assert!(plan.steps.iter().any(|s| matches!(
+            &s.action,
+            Action::SetRegistryValue {
+                hive: RegistryHive::LocalMachine,
+                ..
+            }
+        )));
+    }
+
+    #[test]
+    fn macos_es_requires_entitlement_even_as_root() {
+        let root = audit_probe(Platform::Macos, true, &[]);
+        match macos_endpoint_security().availability(&root) {
+            Availability::NeedsElevation {
+                privilege: Privilege::Entitlement(e),
+            } => assert!(e.contains("endpoint-security")),
+            other => panic!("expected entitlement requirement, got {other:?}"),
+        }
+        assert!(matches!(
+            &macos_endpoint_security().enable_plan(&root).steps[0].action,
+            Action::Manual { .. }
+        ));
     }
 }
