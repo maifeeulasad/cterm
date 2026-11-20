@@ -28,3 +28,11 @@ jobs:
         uses: rustsec/audit-check@v2
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+          # Informational "unmaintained" advisories only (no vulnerability),
+          # pulled in transitively by keyring 4's Secret Service store on Linux
+          # (zbus 5 -> zvariant / zbus_names / zvariant_derive). Those crates
+          # were merged into zbus 6 upstream and only need keyring to adopt it;
+          # the v1 API we use hard-wires Secret Service on *nix, so there is no
+          # local fix short of a keyring-core rewrite of an opt-in feature.
+          # Revisit (and drop these) on the next keyring bump.
+          ignore: RUSTSEC-2026-0370,RUSTSEC-2026-0371,RUSTSEC-2026-0372
