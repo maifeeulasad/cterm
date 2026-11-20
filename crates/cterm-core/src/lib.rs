@@ -36,6 +36,7 @@ pub mod ports;
 pub mod record;
 pub(crate) mod serde_bytes_base64;
 pub mod session;
+pub mod shell;
 pub mod status;
 pub mod stream;
 
@@ -50,5 +51,6 @@ pub use record::ExecutionRecord;
 pub use session::{
     validate_labels, validate_title, Host, Session, MAX_LABELS, MAX_LABEL_BYTES, MAX_TITLE_BYTES,
 };
+pub use shell::{host_default as host_default_shell, CommandShell};
 pub use status::{ExecutionStatus, SessionStatus};
 pub use stream::{StreamChunk, StreamKind};

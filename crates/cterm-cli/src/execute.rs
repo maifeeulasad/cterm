@@ -413,16 +413,18 @@ USAGE:
     cterm execute [FLAGS] <COMMAND>
 
     <COMMAND> is a single string (quote it). It is passed as the raw command
-    (and by default is run under the daemon's default shell via -lc).
+    (and by default is run under the daemon host's default shell).
 
 FLAGS:
     --id <ID>            Attach to an existing session (alias of --session).
     --session <ID>       Same as --id. Empty opens a new session on the host.
     --addr <URL>         Daemon gRPC URL. Default: $CTERM_ADDR or
                          http://127.0.0.1:50051.
-    --program <PATH>     Shell program to use (default on the daemon: /bin/bash).
-    --arg <VALUE>        Argument for --program; may be repeated.
-                         Default on the daemon: [-lc, <COMMAND>].
+    --program <PATH>     Shell program to use (default on the daemon: the host
+                         shell — /bin/bash on Unix, cmd on Windows).
+    --arg <VALUE>        Argument for --program; may be repeated. Default on the
+                         daemon: [-lc, <COMMAND>] on Unix, [/C, <COMMAND>] on
+                         Windows.
     --cwd <PATH>         Working directory on the daemon host.
     --rows <N>           PTY rows (default 24).
     --cols <N>           PTY cols (default 80).

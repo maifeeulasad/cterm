@@ -79,23 +79,27 @@ impl<S: RecordStore + Send + Sync + 'static> Daemon<S> {
 
     /// Starts a command under a PTY on this host and begins recording it.
     ///
-    /// If `req.session` is empty a new local session is opened. Defaults:
-    /// program `/bin/bash`, args `["-lc", <command>]`, 24x80.
+    /// If `req.session` is empty a new local session is opened. When the request
+    /// names no program/args, the host's default shell ([`cterm_core::shell`])
+    /// supplies them: `/bin/bash -lc <command>` on Unix, `cmd /C <command>` on
+    /// Windows. PTY defaults to 24x80.
     pub async fn run(&self, req: v1::RunRequest) -> Result<Started> {
         let session = self.resolve_session(&req).await?;
 
-        let mut command = Command::new(req.command.clone(), "bash");
+        let shell = cterm_core::shell::host_default();
+
+        let mut command = Command::new(req.command.clone(), shell.name());
         if !req.cwd.is_empty() {
             command = command.with_cwd(req.cwd.clone());
         }
 
         let program = if req.program.is_empty() {
-            "/bin/bash".to_owned()
+            shell.program()
         } else {
             req.program.clone()
         };
         let args: Vec<String> = if req.args.is_empty() {
-            vec!["-lc".to_owned(), req.command.clone()]
+            shell.command_args(&req.command)
         } else {
             req.args.clone()
         };
