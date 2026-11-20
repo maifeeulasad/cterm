@@ -1,10 +1,28 @@
-# cterm v0.8.0
+# cterm v0.8.1
 
 A terminal integration / shim tool that lets agents observe, record, stream, and
 drive shell command executions **without ever holding the credentials used to
 open the session**.
 
 > Early release. Tri-platform; shared for feedback. Expect rough edges.
+
+## 0.8.1 — `cterm register` fixed for Windows Terminal
+
+`cterm register` in 0.8.0 wrote a Windows Terminal JSON *fragment*, which does
+not work on the packaged/Store build: the mere presence of a per-user
+`Fragments\` folder can make Terminal fail to load its settings and fall back to
+defaults ([microsoft/terminal#20893](https://github.com/microsoft/terminal/issues/20893)),
+and a valid fragment doesn't rescue it, so the profile never appeared. Now:
+
+- **Registers into `settings.json` directly** (Store / Store-Preview /
+  unpackaged paths), with a stable per-shim GUID so re-runs update in place and
+  `--remove` deletes by GUID. All other profiles and settings are preserved, and
+  Windows Terminal hot-reloads, so the profile shows up with no restart. Any
+  legacy `Fragments\cterm` folder a 0.8.0 install wrote is removed.
+- **Registers multiple shells.** `cterm register` with no argument now adds a
+  profile for *every* installed shim (e.g. both `cterm (powershell)` and
+  `cterm (cmd)`); pass shell names to pick specific ones. Verified on Windows:
+  opening either profile records the interactive session end-to-end.
 
 ## 0.8.0 — terminal registration, cross-platform default shell, dependency refresh
 
