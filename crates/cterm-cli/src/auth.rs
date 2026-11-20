@@ -262,29 +262,37 @@ mod tests {
 
     #[test]
     fn enable_then_status_reports_keyring_source() {
+        // Hold the env lock with ENV_TOKEN cleared: these read the env via
+        // status()/resolve_token(), so they must not race the env-setting test.
         let s = store();
-        let saved = enable(&s, None, false).unwrap();
-        let st = status(&s);
-        assert!(st.has_token);
-        assert_eq!(st.source, Some(AuthSource::Keyring));
-        assert_eq!(st.fingerprint.as_deref(), Some(&saved[..8]));
+        temp_env(ENV_TOKEN, None, || {
+            let saved = enable(&s, None, false).unwrap();
+            let st = status(&s);
+            assert!(st.has_token);
+            assert_eq!(st.source, Some(AuthSource::Keyring));
+            assert_eq!(st.fingerprint.as_deref(), Some(&saved[..8]));
+        });
     }
 
     #[test]
     fn disable_clears_stored_token() {
         let s = store();
-        enable(&s, Some("abc".into()), false).unwrap();
-        disable(&s).unwrap();
-        assert!(!status(&s).has_token);
+        temp_env(ENV_TOKEN, None, || {
+            enable(&s, Some("abc".into()), false).unwrap();
+            disable(&s).unwrap();
+            assert!(!status(&s).has_token);
+        });
     }
 
     #[test]
     fn rotate_returns_fresh_value() {
         let s = store();
-        let a = enable(&s, None, false).unwrap();
-        let b = rotate(&s, false).unwrap();
-        assert_ne!(a, b);
-        assert_eq!(s.get(SERVICE, ACCOUNT_DAEMON_TOKEN).unwrap().unwrap(), b);
+        temp_env(ENV_TOKEN, None, || {
+            let a = enable(&s, None, false).unwrap();
+            let b = rotate(&s, false).unwrap();
+            assert_ne!(a, b);
+            assert_eq!(s.get(SERVICE, ACCOUNT_DAEMON_TOKEN).unwrap().unwrap(), b);
+        });
     }
 
     #[test]
