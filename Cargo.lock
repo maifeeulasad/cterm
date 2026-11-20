@@ -492,6 +492,7 @@ version = "0.8.1"
 dependencies = [
  "async-stream",
  "async-trait",
+ "cterm-capture",
  "cterm-core",
  "cterm-ipc",
  "cterm-proto",
@@ -499,6 +500,7 @@ dependencies = [
  "cterm-storage",
  "futures-core",
  "prost",
+ "serde_json",
  "tokio",
  "tokio-stream",
  "tonic",
