@@ -111,6 +111,11 @@ cterm status               # show what's wrapped and whether it's on PATH
 # add ~/.cterm/bin to PATH (or: cterm install --rc ~/.bashrc)
 ```
 
+To give a terminal a dedicated recorded profile (so the shim launches instead
+of the raw shell), run `cterm register` — it writes a Windows Terminal profile
+fragment on Windows, or prints the profile settings to paste on macOS/Linux.
+See [docs/register.md](docs/register.md).
+
 A human opens a shell (now wrapped); the agent observes/drives it live over the
 same gRPC API. Browse records with `cterm-web` (`http://127.0.0.1:8088`).
 
