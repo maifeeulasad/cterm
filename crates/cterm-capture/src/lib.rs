@@ -26,7 +26,7 @@ pub mod sources;
 
 pub use config::CaptureConfig;
 pub use executor::{apply, ApplyOutcome};
-pub use ingest::{capture_session, event_to_execution};
+pub use ingest::{capture_session, drain, event_to_execution, IngestState};
 pub use probe::SystemProbe;
 
 use cterm_core::capture::{CaptureSource, Platform, SourceId};

@@ -11,6 +11,7 @@ description = "cterm command-capture source catalog and host probe (adapters for
 [dependencies]
 cterm-core.workspace = true
 serde = { workspace = true }
+serde_json.workspace = true
 
 [target.'cfg(unix)'.dependencies]
 nix = { version = "0.31", features = ["user"] }
@@ -23,4 +24,5 @@ windows-sys = { version = "0.61", features = [
 ] }
 
 [dev-dependencies]
-serde_json.workspace = true
+cterm-storage.workspace = true
+tokio = { workspace = true, features = ["rt", "macros"] }

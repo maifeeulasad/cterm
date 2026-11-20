@@ -442,9 +442,11 @@ name = "cterm-capture"
 version = "0.8.1"
 dependencies = [
  "cterm-core",
+ "cterm-storage",
  "nix 0.31.3",
  "serde",
  "serde_json",
+ "tokio",
  "windows-sys",
 ]
 

@@ -9,24 +9,14 @@
 use std::io::Write;
 use std::path::PathBuf;
 
+use cterm_capture::IngestState;
 use cterm_capture::{apply, CaptureConfig, SystemProbe};
 use cterm_core::capture::{
     Availability, CaptureSource, CommandEvent, EventKind, HostProbe, SourceId,
 };
-use cterm_core::{RecordStore, SessionId};
 use cterm_storage::SqliteStore;
 
 use crate::layout::Layout;
-
-/// Cursor + session state so `capture ingest` only ingests new events and keeps
-/// recording into one synthetic capture session.
-#[derive(Default, serde::Serialize, serde::Deserialize)]
-struct IngestState {
-    #[serde(default)]
-    session: Option<SessionId>,
-    #[serde(default)]
-    offset: u64,
-}
 
 /// Entry point for `cterm capture …`, dispatched from `main`.
 pub fn run(layout: &Layout, args: &[String]) -> i32 {
@@ -370,20 +360,6 @@ fn cmd_ingest(layout: &Layout, args: &[String]) -> i32 {
             return 1;
         }
     };
-    // Log truncated/rotated since last run: start over.
-    if state.offset as usize > data.len() {
-        state.offset = 0;
-    }
-    let slice = &data[state.offset as usize..];
-    // Only process up to the last newline — a trailing partial line may still be
-    // mid-write by a hook.
-    let Some(last_nl) = slice.iter().rposition(|&b| b == b'\n') else {
-        println!("No new complete events to ingest.");
-        return 0;
-    };
-    let complete = &slice[..=last_nl];
-    let text = String::from_utf8_lossy(complete).into_owned();
-
     let store = match SqliteStore::open(&db) {
         Ok(s) => s,
         Err(e) => {
@@ -402,35 +378,8 @@ fn cmd_ingest(layout: &Layout, args: &[String]) -> i32 {
         }
     };
 
-    let result: cterm_core::Result<u64> = rt.block_on(async {
-        let session = match state.session {
-            Some(id) => id,
-            None => {
-                let s = cterm_capture::capture_session();
-                store.put_session(&s).await?;
-                state.session = Some(s.id);
-                s.id
-            }
-        };
-        let mut count = 0u64;
-        for line in text.lines() {
-            let line = line.trim();
-            if line.is_empty() {
-                continue;
-            }
-            // Skip unparseable lines rather than abort the whole batch.
-            if let Ok(event) = serde_json::from_str::<CommandEvent>(line) {
-                let rec = cterm_capture::event_to_execution(&event, session);
-                store.put_execution(&rec).await?;
-                count += 1;
-            }
-        }
-        Ok(count)
-    });
-
-    match result {
+    match rt.block_on(cterm_capture::drain(&store, &data, &mut state)) {
         Ok(count) => {
-            state.offset += complete.len() as u64;
             let _ = std::fs::write(
                 &state_path,
                 serde_json::to_string_pretty(&state).unwrap_or_default(),
