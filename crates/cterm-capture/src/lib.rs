@@ -18,9 +18,13 @@
 #![deny(unsafe_code)]
 #![warn(missing_docs)]
 
+pub mod config;
+pub mod executor;
 pub mod probe;
 pub mod sources;
 
+pub use config::CaptureConfig;
+pub use executor::{apply, ApplyOutcome};
 pub use probe::SystemProbe;
 
 use cterm_core::capture::{CaptureSource, Platform, SourceId};

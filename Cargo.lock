@@ -443,6 +443,8 @@ version = "0.8.1"
 dependencies = [
  "cterm-core",
  "nix 0.31.3",
+ "serde",
+ "serde_json",
  "windows-sys",
 ]
 
