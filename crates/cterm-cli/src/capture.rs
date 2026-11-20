@@ -10,7 +10,9 @@ use std::io::Write;
 use std::path::PathBuf;
 
 use cterm_capture::{apply, CaptureConfig, SystemProbe};
-use cterm_core::capture::{Availability, CaptureSource, HostProbe, SourceId};
+use cterm_core::capture::{
+    Availability, CaptureSource, CommandEvent, EventKind, HostProbe, SourceId,
+};
 
 use crate::layout::Layout;
 
@@ -20,6 +22,7 @@ pub fn run(layout: &Layout, args: &[String]) -> i32 {
         Some("list") | Some("status") | None => cmd_list(layout),
         Some("enable") => cmd_set(layout, &args[1..], true),
         Some("disable") => cmd_set(layout, &args[1..], false),
+        Some("emit") => cmd_emit(layout, &args[1..]),
         Some("-h") | Some("--help") => {
             print!("{}", usage());
             0
@@ -253,6 +256,67 @@ fn describe_action(step: &cterm_core::capture::PlanStep) -> String {
         Action::Manual { instructions } => instructions.clone(),
         other => format!("{other:?}"),
     }
+}
+
+/// `cterm capture emit …` — the sink the installed hooks call. Appends one
+/// [`CommandEvent`] as an NDJSON line to `<base>/capture-events.ndjson`.
+///
+/// This is deliberately a cheap append-only log (the v1 transport): the hook
+/// shells out to it per command, so it must not block or fail loudly. A daemon
+/// consumer can tail the file; richer IPC is future work.
+fn cmd_emit(layout: &Layout, args: &[String]) -> i32 {
+    let mut shell = String::new();
+    let mut command = String::new();
+    let mut cwd: Option<String> = None;
+    let mut exit: Option<i32> = None;
+    let mut pid: Option<u32> = None;
+    let mut finished = false;
+
+    let mut it = args.iter();
+    while let Some(a) = it.next() {
+        match a.as_str() {
+            "--shell" => shell = it.next().cloned().unwrap_or_default(),
+            "--command" => command = it.next().cloned().unwrap_or_default(),
+            "--cwd" => cwd = it.next().cloned(),
+            "--pid" => pid = it.next().and_then(|v| v.parse().ok()),
+            "--exit" => exit = it.next().and_then(|v| v.parse().ok()),
+            "--kind" => finished = it.next().map(String::as_str) == Some("finished"),
+            // Unknown flags are ignored so a hook never fails on a version skew.
+            _ => {}
+        }
+    }
+
+    if command.is_empty() {
+        return 0; // nothing to record; never error out of a shell hook
+    }
+
+    let source = SourceId::new(if shell.is_empty() {
+        "shell-hook".to_owned()
+    } else {
+        format!("{shell}-hook")
+    });
+    let mut event = CommandEvent::started(source, command, true);
+    event.shell = (!shell.is_empty()).then_some(shell);
+    event.cwd = cwd;
+    event.pid = pid;
+    if finished {
+        event.kind = EventKind::Finished;
+        event.exit_code = exit;
+    }
+
+    // Best-effort append; a hook must stay silent on failure.
+    if std::fs::create_dir_all(layout.base()).is_ok() {
+        if let Ok(line) = serde_json::to_string(&event) {
+            if let Ok(mut f) = std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(layout.base().join("capture-events.ndjson"))
+            {
+                let _ = writeln!(f, "{line}");
+            }
+        }
+    }
+    0
 }
 
 fn confirm(prompt: &str) -> bool {
