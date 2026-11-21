@@ -623,14 +623,25 @@ pub fn macos_endpoint_security() -> Box<dyn CaptureSource> {
 // PowerShell (cross-platform `pwsh` + Windows PowerShell).
 // ---------------------------------------------------------------------------
 
+// Capture via the `prompt` function rather than PSReadLine's
+// AddToHistoryHandler: `prompt` runs after every interactive command in both
+// Windows PowerShell and pwsh and doesn't depend on PSReadLine being the active
+// line editor (which it isn't, e.g., under a PTY), so it fires reliably. It
+// reads the most recent history entry and reports it, chaining the previous
+// prompt so a custom prompt still works.
 const PS_HOOK: &str = r#"if (-not $env:__CTERM_CAPTURE_LOADED) {
   $env:__CTERM_CAPTURE_LOADED = '1'
-  if (Get-Module -ListAvailable PSReadLine) {
-    Set-PSReadLineOption -AddToHistoryHandler {
-      param([string]$line)
-      try { cterm capture emit --shell powershell --command $line --cwd $PWD.Path *> $null } catch {}
-      $true
-    }
+  $global:__cterm_prev_prompt = $function:prompt
+  $global:__cterm_last_id = 0
+  function global:prompt {
+    try {
+      $h = Get-History -Count 1 -ErrorAction SilentlyContinue
+      if ($h -and $h.Id -ne $global:__cterm_last_id) {
+        $global:__cterm_last_id = $h.Id
+        cterm capture emit --shell powershell --command $h.CommandLine --cwd $PWD.Path *> $null
+      }
+    } catch {}
+    if ($global:__cterm_prev_prompt) { & $global:__cterm_prev_prompt } else { "PS $($PWD.Path)> " }
   }
 }"#;
 
