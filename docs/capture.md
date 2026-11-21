@@ -128,5 +128,10 @@ cterm capture ingest            # new events -> ~/.cterm/cterm.db (or $CTERM_DB)
 - **Privilege.** The bypass-proof layers need root/admin, and macOS needs an
   Apple-approved entitlement — unprivileged installs reach only the shell-hook
   layer.
+- **Kernel audit support.** `linux-auditd` needs a kernel with the audit
+  subsystem enabled. Some environments don't provide it — notably **WSL2**,
+  where `auditctl` fails with "Operation not permitted" even as root. cterm
+  still writes the persisted `rules.d` file and reports the live-rule failure
+  honestly; the shell-hook layer is unaffected.
 - **Secrets.** Command lines can carry secrets; a capture-all deployment needs a
   retention / redaction policy.
