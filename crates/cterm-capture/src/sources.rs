@@ -209,9 +209,12 @@ const CMD_AUTORUN: &str = "AutoRun";
 
 // `\r\n` line endings for a Windows batch file; `%CMDCMDLINE%` is the full
 // command line that launched this cmd (e.g. `cmd /c <command>`), so this
-// captures the `cmd /c` invocations that bypass the shim.
+// captures the `cmd /c` invocations that bypass the shim. %CMDCMDLINE% embeds
+// quotes (around the exe path), which break if passed as an argument, so stash
+// it in an env var and have `emit` read it with --command-env.
 const CMD_HOOK: &str = "@echo off\r\n\
-cterm capture emit --shell cmd --command \"%CMDCMDLINE%\" --cwd \"%CD%\" >nul 2>&1\r\n";
+set \"CTERM_CMDLINE=%CMDCMDLINE%\"\r\n\
+cterm capture emit --shell cmd --command-env CTERM_CMDLINE --cwd \"%CD%\" >nul 2>&1\r\n";
 
 /// The cmd capture source: registers a Command Processor `AutoRun` entry
 /// ([`Layer::NonInteractiveHook`]). AutoRun fires on *every* cmd start incl.

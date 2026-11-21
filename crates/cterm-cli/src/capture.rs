@@ -280,6 +280,14 @@ fn cmd_emit(layout: &Layout, args: &[String]) -> i32 {
         match a.as_str() {
             "--shell" => shell = it.next().cloned().unwrap_or_default(),
             "--command" => command = it.next().cloned().unwrap_or_default(),
+            // Read the command from an env var instead of an argument. This
+            // avoids all shell-quoting hazards — notably Windows `cmd`'s
+            // %CMDCMDLINE%, which embeds quotes that break arg parsing.
+            "--command-env" => {
+                if let Some(var) = it.next() {
+                    command = std::env::var(var).unwrap_or_default();
+                }
+            }
             "--cwd" => cwd = it.next().cloned(),
             "--pid" => pid = it.next().and_then(|v| v.parse().ok()),
             "--exit" => exit = it.next().and_then(|v| v.parse().ok()),
