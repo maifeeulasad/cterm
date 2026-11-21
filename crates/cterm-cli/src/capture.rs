@@ -189,7 +189,7 @@ fn apply_enable(
         }
     }
 
-    let outcome = apply(&plan);
+    let outcome = apply(&plan, probe.is_elevated());
     for done in &outcome.applied {
         println!("  applied: {done}");
     }
@@ -222,7 +222,7 @@ fn apply_disable(
     config: &mut CaptureConfig,
 ) -> bool {
     let info = source.info();
-    let outcome = apply(&source.disable_plan(probe));
+    let outcome = apply(&source.disable_plan(probe), probe.is_elevated());
     for done in &outcome.applied {
         println!("  reverted: {done}");
     }

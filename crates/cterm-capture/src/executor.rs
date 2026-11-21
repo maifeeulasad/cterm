@@ -33,12 +33,17 @@ impl ApplyOutcome {
     }
 }
 
-/// Applies the non-elevated steps of `plan`; defers elevated and manual steps.
+/// Applies the steps of `plan` the caller is privileged to run: always the
+/// unprivileged ones, and the `elevated` ones too when `is_elevated` (the
+/// process already has root/admin). Steps it can't run — elevated ones without
+/// privilege, and every [`Action::Manual`] — are deferred for the operator.
+/// Nothing here escalates on its own.
 #[must_use]
-pub fn apply(plan: &EnablePlan) -> ApplyOutcome {
+pub fn apply(plan: &EnablePlan, is_elevated: bool) -> ApplyOutcome {
     let mut out = ApplyOutcome::default();
     for step in &plan.steps {
-        if step.elevated || matches!(step.action, Action::Manual { .. }) {
+        let manual = matches!(step.action, Action::Manual { .. });
+        if manual || (step.elevated && !is_elevated) {
             out.deferred.push(step.clone());
             continue;
         }
@@ -295,22 +300,54 @@ mod tests {
                 false,
             ),
         ]);
-        let out = apply(&plan);
+        // Unprivileged caller: the elevated step + the manual are deferred.
+        let out = apply(&plan, false);
         assert_eq!(out.applied.len(), 1);
-        assert_eq!(out.deferred.len(), 2); // the elevated + the manual
+        assert_eq!(out.deferred.len(), 2);
         assert!(out.ok());
     }
 
     #[test]
+    fn elevated_caller_runs_elevated_steps_but_still_defers_manual() {
+        let dir = TempDir::new();
+        let path = dir.path("elevated-written");
+        let plan = EnablePlan::new(vec![
+            PlanStep::new(
+                "elevated write",
+                Action::WriteFile {
+                    path: path.clone(),
+                    contents: "ok".into(),
+                },
+                true, // elevated
+            ),
+            PlanStep::new(
+                "by hand",
+                Action::Manual {
+                    instructions: "do it".into(),
+                },
+                true,
+            ),
+        ]);
+        // As an elevated caller the elevated write runs; Manual always defers.
+        let out = apply(&plan, true);
+        assert_eq!(out.applied.len(), 1);
+        assert_eq!(out.deferred.len(), 1);
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "ok");
+    }
+
+    #[test]
     fn run_command_failure_is_reported() {
-        let out = apply(&EnablePlan::new(vec![PlanStep::new(
-            "bad command",
-            Action::RunCommand {
-                program: "this-program-does-not-exist-xyz".into(),
-                args: vec![],
-            },
+        let out = apply(
+            &EnablePlan::new(vec![PlanStep::new(
+                "bad command",
+                Action::RunCommand {
+                    program: "this-program-does-not-exist-xyz".into(),
+                    args: vec![],
+                },
+                false,
+            )]),
             false,
-        )]));
+        );
         assert!(!out.ok());
         assert_eq!(out.errors.len(), 1);
     }
