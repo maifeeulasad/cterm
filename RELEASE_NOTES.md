@@ -1,10 +1,15 @@
-# cterm v0.9.0
+# cterm v0.9.1
 
 A terminal integration / shim tool that lets agents observe, record, stream, and
 drive shell command executions **without ever holding the credentials used to
 open the session**.
 
 > Early release. Tri-platform; shared for feedback. Expect rough edges.
+
+## 0.9.1 — dependency maintenance
+
+- `rusqlite` 0.42 → 0.43, `nix` 0.31 → 0.32 (Dependabot #40, #41). Source-compatible;
+  no behavior change.
 
 ## 0.9.0 — command capture beyond the shim (#19)
 
