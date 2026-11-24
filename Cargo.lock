@@ -439,7 +439,7 @@ dependencies = [
 
 [[package]]
 name = "cterm-capture"
-version = "0.8.1"
+version = "0.9.0"
 dependencies = [
  "cterm-core",
  "cterm-storage",
@@ -452,7 +452,7 @@ dependencies = [
 
 [[package]]
 name = "cterm-cli"
-version = "0.8.1"
+version = "0.9.0"
 dependencies = [
  "cterm-capture",
  "cterm-core",
@@ -476,7 +476,7 @@ dependencies = [
 
 [[package]]
 name = "cterm-core"
-version = "0.8.1"
+version = "0.9.0"
 dependencies = [
  "async-trait",
  "serde",
@@ -488,7 +488,7 @@ dependencies = [
 
 [[package]]
 name = "cterm-daemon"
-version = "0.8.1"
+version = "0.9.0"
 dependencies = [
  "async-stream",
  "async-trait",
@@ -508,7 +508,7 @@ dependencies = [
 
 [[package]]
 name = "cterm-ipc"
-version = "0.8.1"
+version = "0.9.0"
 dependencies = [
  "cterm-core",
  "serde",
@@ -518,7 +518,7 @@ dependencies = [
 
 [[package]]
 name = "cterm-proto"
-version = "0.8.1"
+version = "0.9.0"
 dependencies = [
  "cterm-core",
  "prost",
@@ -530,7 +530,7 @@ dependencies = [
 
 [[package]]
 name = "cterm-shim"
-version = "0.8.1"
+version = "0.9.0"
 dependencies = [
  "cterm-core",
  "cterm-storage",
@@ -541,7 +541,7 @@ dependencies = [
 
 [[package]]
 name = "cterm-storage"
-version = "0.8.1"
+version = "0.9.0"
 dependencies = [
  "async-trait",
  "cterm-core",
@@ -553,7 +553,7 @@ dependencies = [
 
 [[package]]
 name = "cterm-web"
-version = "0.8.1"
+version = "0.9.0"
 dependencies = [
  "axum",
  "cterm-core",

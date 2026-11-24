@@ -1,10 +1,38 @@
-# cterm v0.8.1
+# cterm v0.9.0
 
 A terminal integration / shim tool that lets agents observe, record, stream, and
 drive shell command executions **without ever holding the credentials used to
 open the session**.
 
 > Early release. Tri-platform; shared for feedback. Expect rough edges.
+
+## 0.9.0 — command capture beyond the shim (#19)
+
+cterm's shim records a shell it launches, but much of what runs on a host
+bypasses it — `sh -c`/`bash -c` from editors and build tools, scripts, shells
+launched by absolute path. **Command capture** closes that gap by modelling
+capture as independent *sources* across complementary *layers* (ports and
+adapters), each emitting a common event that the daemon records alongside shim
+sessions.
+
+- **`cterm capture`** — `list` sources with per-host availability; `enable` /
+  `disable` them; `emit` (the sink hooks call) and `ingest`.
+- **Source catalog** (new `cterm-capture` crate): shell hooks — bash
+  (`DEBUG`-trap + `BASH_ENV`, catches `bash -c`), zsh (`preexec`), cmd
+  (`AutoRun`, catches `cmd /c`), PowerShell (`prompt`-based, per interactive
+  command) — plus the bypass-proof system-audit layer: Linux `auditd`, Windows
+  process auditing (4688), macOS Endpoint Security, PowerShell Script Block
+  Logging.
+- **Elevation is opt-in and consented**: enabling a source that needs root/admin
+  shows exactly what will run and asks you to accept or reject; cterm never
+  escalates on its own, and applies elevated steps itself only when already
+  privileged.
+- **Automatic ingestion**: the daemon drains the capture event log into the
+  record store, so captured commands show up in `cterm-web` and the gRPC
+  queries next to shim sessions.
+- Verified end-to-end on Windows and Linux (WSL2). See
+  [docs/capture.md](docs/capture.md) and the research in
+  [#19](https://github.com/maifeeulasad/cterm/issues/19).
 
 ## 0.8.1 — `cterm register` fixed for Windows Terminal
 
