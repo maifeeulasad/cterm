@@ -438,9 +438,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "cterm-capture"
+version = "0.8.1"
+dependencies = [
+ "cterm-core",
+ "cterm-storage",
+ "nix 0.31.3",
+ "serde",
+ "serde_json",
+ "tokio",
+ "windows-sys",
+]
+
+[[package]]
 name = "cterm-cli"
 version = "0.8.1"
 dependencies = [
+ "cterm-capture",
  "cterm-core",
  "cterm-ipc",
  "cterm-proto",
@@ -478,6 +492,7 @@ version = "0.8.1"
 dependencies = [
  "async-stream",
  "async-trait",
+ "cterm-capture",
  "cterm-core",
  "cterm-ipc",
  "cterm-proto",
@@ -485,6 +500,7 @@ dependencies = [
  "cterm-storage",
  "futures-core",
  "prost",
+ "serde_json",
  "tokio",
  "tokio-stream",
  "tonic",

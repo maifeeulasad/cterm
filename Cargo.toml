@@ -22,6 +22,7 @@ members = [
     "crates/cterm-cli",
     "crates/cterm-web",
     "crates/cterm-ipc",
+    "crates/cterm-capture",
 ]
 
 [workspace.package]
@@ -60,6 +61,7 @@ cterm-proto = { path = "crates/cterm-proto" }
 cterm-storage = { path = "crates/cterm-storage" }
 cterm-shim = { path = "crates/cterm-shim" }
 cterm-ipc = { path = "crates/cterm-ipc" }
+cterm-capture = { path = "crates/cterm-capture" }
 
 [profile.release]
 lto = "thin"
