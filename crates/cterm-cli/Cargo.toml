@@ -33,7 +33,7 @@ keyring = "4"
 uuid = { workspace = true, features = ["v5"] }
 
 [target.'cfg(unix)'.dependencies]
-nix = { version = "0.31", features = ["term", "signal"] }
+nix = { version = "0.32", features = ["term", "signal"] }
 terminal_size = "0.4"
 
 [target.'cfg(windows)'.dependencies]
